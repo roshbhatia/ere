@@ -83,7 +83,7 @@ prints the JSON Schema; `lifier config show` prints the effective values.
 defaultBackend: docker
 
 amp:
-  apiKeySecret: "op://Private/Ampcode/credential"
+  apiKeySecret: "op://Personal/ampcode/credential"
 
 defaults:
   image: lifier/amp:latest
@@ -92,15 +92,15 @@ defaults:
 
 runners:
   - name: sysinit
-    workspace: ~/github/personal/roshbhatia/sysinit
-    runnerId: lv426-sysinit
+    workspace: ~/src/sysinit
+    runnerId: workstation-sysinit
 
   - name: sysinit-vm
     backend: vz
-    workspace: ~/github/personal/roshbhatia/sysinit
-    runnerId: lv426-sysinit-vm
+    workspace: ~/src/sysinit
+    runnerId: workstation-sysinit-vm
     secrets:
-      OPENROUTER_API_KEY: "op://Homelab/homelab.openrouter/openrouter-api-key"
+      OPENROUTER_API_KEY: "op://Personal/openrouter/api-key"
 ```
 
 A runner id must be a valid hostname; lifier rejects one that is not rather
@@ -125,7 +125,7 @@ written to lifier's own config.
 Amp registers a model router against your account, not against a sandbox:
 
 ```bash
-op read "op://Homelab/homelab.openrouter/openrouter-api-key" \
+op read "op://Personal/openrouter/api-key" \
   | amp config model-providers add-router openrouter --api-key-file - --active
 ```
 
