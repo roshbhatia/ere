@@ -1,0 +1,42 @@
+# lifier configuration. Copy to $XDG_CONFIG_HOME/lifier/lifier.yaml.
+defaultBackend: docker
+
+amp:
+  binary: amp
+  # lifier never stores a credential. It resolves this reference at launch and
+  # passes the value to the sandbox over stdin.
+  apiKeySecret: "op://Private/Ampcode/credential"
+  remoteControlTerminal: false
+
+defaults:
+  image: lifier/amp:latest
+  mountPath: /workspace
+  cpus: 4
+  memoryMB: 8192
+  diskGB: 60
+
+runners:
+  # A container on the local Docker daemon. Fast to create, shares the kernel.
+  - name: sysinit
+    backend: docker
+    workspace: ~/github/personal/roshbhatia/sysinit
+    runnerId: lv426-sysinit
+
+  # A Linux VM on Apple's Virtualization.framework. Its own kernel, so an agent
+  # that installs system packages cannot reach the host.
+  - name: sysinit-vm
+    backend: vz
+    workspace: ~/github/personal/roshbhatia/sysinit
+    runnerId: lv426-sysinit-vm
+    provision:
+      - "command -v amp || curl -fsSL https://ampcode.com/install.sh | bash"
+    env:
+      PATH: "/home/$USER.linux/.amp/bin:/usr/local/bin:/usr/bin:/bin"
+
+  # The same VM shape on QEMU. On Linux this is KVM-accelerated.
+  - name: sysinit-qemu
+    backend: qemu
+    workspace: ~/github/personal/roshbhatia/sysinit
+    runnerId: lv426-sysinit-qemu
+    secrets:
+      OPENROUTER_API_KEY: "op://Homelab/homelab.openrouter/openrouter-api-key"
