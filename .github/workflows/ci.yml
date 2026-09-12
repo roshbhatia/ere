@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: vet
+        run: go vet ./...
+
+      - name: test
+        run: go test -race -coverprofile=coverage.out ./...
+
+      - name: build
+        run: go build ./...
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-${{ matrix.os }}
+          path: coverage.out
+
+  nix:
+    name: Nix
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/nix-installer-action@v22
+
+      - name: flake check
+        run: nix flake check --all-systems
+
+      - name: build
+        run: nix build
+
+      - name: smoke the built binary
+        run: ./result/bin/lifier --version
+
+      # The dev shell is the source of truth for tool versions, so the lint
+      # steps below run the same gofumpt/staticcheck/shfmt a contributor gets.
+      - name: gofumpt
+        run: |
+          unformatted=$(nix develop --command gofumpt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "gofumpt needs to run on:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: staticcheck
+        run: nix develop --command staticcheck ./...
+
+      - name: shfmt
+        run: nix develop --command shfmt -i 2 -ci -sr -s -d hack/
