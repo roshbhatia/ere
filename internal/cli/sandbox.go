@@ -40,6 +40,11 @@ func (o *options) backendClient(name string) (*sandbox.Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	for provider, settings := range cfg.Providers {
+		if err := reg.Configure(provider, settings.Args()); err != nil {
+			return nil, err
+		}
+	}
 	return reg.Client(name)
 }
 
@@ -66,6 +71,12 @@ func newSandboxCreateCmd(opts *options) *cobra.Command {
 	cmd.Flags().StringVar(&spec.Image, "image", "", "container image or lima base template")
 	cmd.Flags().StringVar(&spec.Workspace, "workspace", "", "host directory to mount")
 	cmd.Flags().StringVar(&spec.MountPath, "mount-path", "/workspace", "where the workspace appears inside")
+	cmd.Flags().StringVar(&spec.Storage.Kind, "storage-kind", "", "bind, volume, guest-disk, pvc, or ephemeral")
+	cmd.Flags().StringVar(&spec.Storage.Source, "storage-source", "", "existing volume or PVC")
+	cmd.Flags().StringVar(&spec.Architecture, "architecture", "", "guest or container architecture: amd64 or arm64")
+	cmd.Flags().StringVar(&spec.Storage.Class, "storage-class", "", "workspace PVC storage class")
+	cmd.Flags().IntVar(&spec.Storage.SizeGB, "storage-size-gb", 0, "workspace PVC size in GiB")
+	cmd.Flags().StringVar(&spec.BootVolume, "boot-volume", "", "existing VM boot PVC")
 	cmd.Flags().BoolVar(&spec.ReadOnly, "read-only", false, "mount the workspace read-only")
 	cmd.Flags().IntVar(&spec.CPUs, "cpus", 0, "virtual CPUs")
 	cmd.Flags().IntVar(&spec.MemoryMB, "memory-mb", 0, "memory in MiB")

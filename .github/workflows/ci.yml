@@ -51,7 +51,9 @@ jobs:
       - uses: DeterminateSystems/nix-installer-action@v22
 
       - name: flake check
-        run: nix flake check --all-systems
+        run: |
+          nix flake check --all-systems --no-build
+          nix flake check
 
       - name: build
         run: nix build
@@ -75,3 +77,6 @@ jobs:
 
       - name: shfmt
         run: nix develop --command shfmt -i 2 -ci -sr -s -d hack/
+
+      - name: Amp plugin tests
+        run: nix develop --command task plugin:test

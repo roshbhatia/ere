@@ -1,8 +1,0 @@
-version: provider/v1
-kind: sandbox
-name: k8s
-description: Lima VM with a local K3s cluster
-command: [lifier, backend, vz, --base, "template://k3s"]
-actions:
-  sandbox:
-    description: Manage a Lima VM with Kubernetes

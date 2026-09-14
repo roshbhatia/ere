@@ -1,9 +1,10 @@
 // Package docker implements the sandbox contract on top of the docker CLI.
-// The container is a long-lived shell that lifier execs into; the agent is not
-// the container's entrypoint, so a crashed agent does not destroy its sandbox.
+// Managed workloads use the container restart policy for process recovery.
 package docker
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -25,7 +26,8 @@ const (
 
 // Backend drives one docker daemon. Binary may name a drop-in such as podman.
 type Backend struct {
-	Binary string
+	Binary  string
+	Context string
 }
 
 // New returns a backend using the docker CLI.
@@ -41,12 +43,12 @@ func (b *Backend) Name() string { return "docker" }
 func container(name string) string { return Prefix + name }
 
 func (b *Backend) Probe(ctx context.Context) (sandbox.Probe, error) {
-	probe := sandbox.Probe{Backend: b.Name(), Operations: sandbox.Operations()}
+	probe := sandbox.Probe{Backend: b.Name(), Operations: append(sandbox.Operations(), sandbox.OpValidate), Contract: sandbox.ContractVersion, StorageModes: []string{"bind", "volume"}, Supervision: "container-restart", Retention: "binds and named volumes survive removal"}
 	if !backend.Available(b.Binary) {
 		probe.Detail = b.Binary + " is not on PATH"
 		return probe, nil
 	}
-	out, err := backend.Run(ctx, b.Binary, "version", "--format", "{{.Server.Version}}")
+	out, err := b.run(ctx, "version", "--format", "{{.Server.Version}}")
 	if err != nil {
 		probe.Detail = err.Error()
 		return probe, nil
@@ -61,8 +63,33 @@ func (b *Backend) Probe(ctx context.Context) (sandbox.Probe, error) {
 }
 
 func (b *Backend) Create(ctx context.Context, spec sandbox.Spec) (sandbox.Status, error) {
-	if spec.Name == "" {
-		return sandbox.Status{}, fmt.Errorf("sandbox name is required")
+	if _, err := b.Validate(ctx, spec); err != nil {
+		return sandbox.Status{}, err
+	}
+	if spec.Storage.Kind != "" && spec.Storage.Kind != "bind" && spec.Storage.Kind != "volume" {
+		return sandbox.Status{}, fmt.Errorf("docker supports bind or volume storage")
+	}
+	if spec.BootVolume != "" {
+		return sandbox.Status{}, fmt.Errorf("docker does not support bootVolume")
+	}
+	workspace := spec.Workspace
+	if spec.Storage.Source != "" {
+		workspace = spec.Storage.Source
+	}
+	existing, err := b.Status(ctx, sandbox.Ref{Name: spec.Name})
+	if err != nil {
+		return existing, err
+	}
+	if existing.State != sandbox.StateAbsent {
+		if existing.Digest != "" && existing.Digest != sandbox.Digest(spec) {
+			return existing, fmt.Errorf("configuration changed: container replacement required; retained binds and named volumes survive rm")
+		}
+		if spec.Workload != nil && existing.Managed {
+			if err := b.installEnv(ctx, existing.ResourceID, spec.Workload.Env); err != nil {
+				return existing, err
+			}
+		}
+		return existing, nil
 	}
 	image := spec.Image
 	if image == "" {
@@ -81,8 +108,8 @@ func (b *Backend) Create(ctx context.Context, spec sandbox.Spec) (sandbox.Status
 		"--workdir", mount,
 		"--init",
 	}
-	if spec.Workspace != "" {
-		bind := spec.Workspace + ":" + mount
+	if workspace != "" {
+		bind := workspace + ":" + mount
 		if spec.ReadOnly {
 			bind += ":ro"
 		}
@@ -95,65 +122,78 @@ func (b *Backend) Create(ctx context.Context, spec sandbox.Spec) (sandbox.Status
 		args = append(args, "--memory", strconv.Itoa(spec.MemoryMB)+"m")
 	}
 	for key, value := range spec.Labels {
+		if key == LabelSandbox || key == "lifier.backend" || key == "lifier.owner" || key == "lifier.digest" {
+			continue
+		}
 		args = append(args, "--label", key+"="+value)
 	}
-	args = append(args, image, "sleep", "infinity")
+	if spec.Architecture != "" {
+		args = append(args, "--platform", "linux/"+spec.Architecture)
+	}
+	if spec.Workload != nil {
+		id, err := backend.LoadIdentity("docker|"+b.Context, spec.Name)
+		if err != nil {
+			return sandbox.Status{}, err
+		}
+		id.UID = ""
+		if err := id.Save(); err != nil {
+			return sandbox.Status{}, err
+		}
+		args = append(args, "--restart", "unless-stopped", "--label", "lifier.owner="+id.Owner, "--label", "lifier.digest="+sandbox.Digest(spec))
+		args = append(args, image, "sh", "-c", "set -a; . /var/lib/lifier/env; set +a; "+backend.WorkloadScript(*spec.Workload))
+	} else {
+		args = append(args, image, "sleep", "infinity")
+	}
 
 	sandbox.Progress(ctx, "create", "creating container "+container(spec.Name))
-	if _, err := backend.Check(ctx, b.Binary, args...); err != nil {
+	if _, err := b.check(ctx, args...); err != nil {
 		return sandbox.Status{}, err
+	}
+	if spec.Workload != nil {
+		status, err := b.Status(ctx, sandbox.Ref{Name: spec.Name})
+		if err != nil {
+			return status, err
+		}
+		if err := b.installEnv(ctx, status.ResourceID, spec.Workload.Env); err != nil {
+			return status, err
+		}
 	}
 	return b.Status(ctx, sandbox.Ref{Name: spec.Name})
 }
 
 func (b *Backend) Start(ctx context.Context, ref sandbox.Ref) (sandbox.Status, error) {
+	status, err := b.Status(ctx, ref)
+	if err != nil {
+		return status, err
+	}
+	if status.State == sandbox.StateAbsent {
+		return status, nil
+	}
 	sandbox.Progress(ctx, "start", "starting "+container(ref.Name))
-	if _, err := backend.Check(ctx, b.Binary, "start", container(ref.Name)); err != nil {
+	if _, err := b.check(ctx, "start", status.ResourceID); err != nil {
 		return sandbox.Status{}, err
 	}
 	return b.Status(ctx, ref)
 }
 
 func (b *Backend) Exec(ctx context.Context, req sandbox.ExecRequest) (sandbox.ExecResult, error) {
-	if len(req.Argv) == 0 {
-		return sandbox.ExecResult{}, fmt.Errorf("exec requires a command")
-	}
-	if len(req.Env) > 0 {
-		if err := b.writeEnv(ctx, req.Name, req.Env); err != nil {
-			return sandbox.ExecResult{}, err
-		}
-	}
-	args := []string{"exec"}
-	if req.Detach {
-		args = append(args, "--detach")
-	}
-	if req.Workdir != "" {
-		args = append(args, "--workdir", req.Workdir)
-	}
-	args = append(args, container(req.Name))
-	args = append(args, backend.WrapCommand(req.Argv, req.LogFile)...)
-
-	out, err := backend.Run(ctx, b.Binary, args...)
+	status, err := b.Status(ctx, sandbox.Ref{Name: req.Name})
 	if err != nil {
 		return sandbox.ExecResult{}, err
 	}
-	return sandbox.ExecResult{ExitCode: out.ExitCode, Stdout: out.Stdout, Stderr: out.Stderr}, nil
-}
-
-func (b *Backend) writeEnv(ctx context.Context, name string, env map[string]string) error {
-	out, err := backend.RunStdin(ctx, backend.EnvFile(env), b.Binary,
-		"exec", "--interactive", container(name),
-		"sh", "-c", "umask 077; cat > "+backend.EnvPath)
+	if status.State == sandbox.StateAbsent {
+		return sandbox.ExecResult{}, fmt.Errorf("sandbox is absent")
+	}
+	script, err := backend.ExecScript(req)
 	if err != nil {
-		return err
+		return sandbox.ExecResult{}, err
 	}
-	if out.ExitCode != 0 {
-		return fmt.Errorf("write sandbox environment: %s", strings.TrimSpace(out.Stderr))
-	}
-	return nil
+	out, err := b.stdin(ctx, script, "exec", "-i", status.ResourceID, "sh", "-s")
+	return sandbox.ExecResult{ExitCode: out.ExitCode, Stdout: out.Stdout, Stderr: out.Stderr}, err
 }
 
 type inspected struct {
+	ID     string
 	Name   string
 	Config struct {
 		Image  string
@@ -167,7 +207,7 @@ type inspected struct {
 
 func (b *Backend) Status(ctx context.Context, ref sandbox.Ref) (sandbox.Status, error) {
 	status := sandbox.Status{Name: ref.Name, Backend: b.Name(), State: sandbox.StateAbsent}
-	out, err := backend.Run(ctx, b.Binary, "inspect", container(ref.Name))
+	out, err := b.run(ctx, "inspect", container(ref.Name))
 	if err != nil {
 		return status, err
 	}
@@ -182,6 +222,27 @@ func (b *Backend) Status(ctx context.Context, ref sandbox.Ref) (sandbox.Status, 
 		return status, fmt.Errorf("decode docker inspect for %s: %w", ref.Name, err)
 	}
 	record := records[0]
+	if record.Config.Labels[LabelSandbox] != ref.Name {
+		return status, fmt.Errorf("refusing foreign container %s", container(ref.Name))
+	}
+	status.ResourceID = record.ID
+	status.Digest = record.Config.Labels["lifier.digest"]
+	status.Managed = status.Digest != ""
+	if status.Managed {
+		id, err := backend.LoadIdentity("docker|"+b.Context, ref.Name)
+		if err != nil {
+			return status, err
+		}
+		if record.Config.Labels["lifier.owner"] != id.Owner || (id.UID != "" && id.UID != record.ID) {
+			return status, fmt.Errorf("refusing replaced or foreign managed container")
+		}
+		if id.UID == "" {
+			id.UID = record.ID
+			if err := id.Save(); err != nil {
+				return status, err
+			}
+		}
+	}
 	status.Image = record.Config.Image
 	status.State = mapState(record.State.Status)
 	status.Detail = record.State.Status
@@ -202,7 +263,7 @@ func mapState(value string) sandbox.State {
 }
 
 func (b *Backend) List(ctx context.Context) (sandbox.List, error) {
-	out, err := backend.Check(ctx, b.Binary, "ps", "--all",
+	out, err := b.check(ctx, "ps", "--all",
 		"--filter", "label="+LabelSandbox,
 		"--format", "{{.Label \""+LabelSandbox+"\"}}\t{{.Image}}\t{{.State}}")
 	if err != nil {
@@ -229,11 +290,29 @@ func (b *Backend) List(ctx context.Context) (sandbox.List, error) {
 }
 
 func (b *Backend) Logs(ctx context.Context, req sandbox.LogRequest) (sandbox.Logs, error) {
+	status, err := b.Status(ctx, sandbox.Ref{Name: req.Name})
+	if err != nil {
+		return sandbox.Logs{}, err
+	}
+	if status.Managed {
+		lines := req.Lines
+		if lines <= 0 {
+			lines = 200
+		}
+		out, err := b.run(ctx, "logs", "--tail", strconv.Itoa(lines), status.ResourceID)
+		if err != nil {
+			return sandbox.Logs{}, err
+		}
+		if out.ExitCode != 0 {
+			return sandbox.Logs{}, fmt.Errorf("container logs: %s", out.Stderr)
+		}
+		return sandbox.Logs{Lines: strings.Split(strings.TrimRight(out.Stdout+out.Stderr, "\n"), "\n")}, nil
+	}
 	lines := req.Lines
 	if lines <= 0 {
 		lines = 200
 	}
-	out, err := backend.Run(ctx, b.Binary, "exec", container(req.Name),
+	out, err := b.run(ctx, "exec", container(req.Name),
 		"sh", "-c", "tail -n "+strconv.Itoa(lines)+" "+LogPath+" 2>/dev/null || true")
 	if err != nil {
 		return sandbox.Logs{}, err
@@ -249,7 +328,14 @@ func (b *Backend) Logs(ctx context.Context, req sandbox.LogRequest) (sandbox.Log
 const LogPath = "/tmp/lifier.log"
 
 func (b *Backend) Stop(ctx context.Context, ref sandbox.Ref) (sandbox.Status, error) {
-	out, err := backend.Run(ctx, b.Binary, "stop", container(ref.Name))
+	status, err := b.Status(ctx, ref)
+	if err != nil {
+		return status, err
+	}
+	if status.State == sandbox.StateAbsent {
+		return status, nil
+	}
+	out, err := b.run(ctx, "stop", status.ResourceID)
 	if err != nil {
 		return sandbox.Status{}, err
 	}
@@ -260,7 +346,14 @@ func (b *Backend) Stop(ctx context.Context, ref sandbox.Ref) (sandbox.Status, er
 }
 
 func (b *Backend) Destroy(ctx context.Context, ref sandbox.Ref) (sandbox.Status, error) {
-	out, err := backend.Run(ctx, b.Binary, "rm", "--force", "--volumes", container(ref.Name))
+	status, err := b.Status(ctx, ref)
+	if err != nil {
+		return status, err
+	}
+	if status.State == sandbox.StateAbsent {
+		return status, nil
+	}
+	out, err := b.run(ctx, "rm", "--force", "--volumes", status.ResourceID)
 	if err != nil {
 		return sandbox.Status{}, err
 	}
@@ -268,4 +361,72 @@ func (b *Backend) Destroy(ctx context.Context, ref sandbox.Ref) (sandbox.Status,
 		return sandbox.Status{}, fmt.Errorf("remove %s: %s", ref.Name, strings.TrimSpace(out.Stderr))
 	}
 	return sandbox.Status{Name: ref.Name, Backend: b.Name(), State: sandbox.StateAbsent}, nil
+}
+
+func (b *Backend) args(args []string) []string {
+	if b.Context != "" {
+		return append([]string{"--context", b.Context}, args...)
+	}
+	return args
+}
+
+func (b *Backend) run(ctx context.Context, args ...string) (backend.Output, error) {
+	return backend.Run(ctx, b.Binary, b.args(args)...)
+}
+
+func (b *Backend) stdin(ctx context.Context, input string, args ...string) (backend.Output, error) {
+	return backend.RunStdin(ctx, input, b.Binary, b.args(args)...)
+}
+
+func (b *Backend) check(ctx context.Context, args ...string) (string, error) {
+	return backend.Check(ctx, b.Binary, b.args(args)...)
+}
+
+func (b *Backend) Validate(ctx context.Context, spec sandbox.Spec) (sandbox.Plan, error) {
+	err := sandbox.Validate(spec)
+	if spec.Storage.Class != "" || spec.Storage.SizeGB != 0 || spec.DiskGB != 0 {
+		return sandbox.Plan{}, fmt.Errorf("docker does not manage storage classes or disk sizes")
+	}
+	if spec.Storage.Kind == "bind" && spec.Storage.Source == "" && spec.Workspace == "" {
+		return sandbox.Plan{}, fmt.Errorf("bind storage requires a host source")
+	}
+	if spec.Storage.Kind == "volume" && spec.Storage.Source == "" {
+		return sandbox.Plan{}, fmt.Errorf("volume storage requires a named source")
+	}
+	if spec.Architecture != "" && spec.Architecture != "arm64" && spec.Architecture != "amd64" {
+		return sandbox.Plan{}, fmt.Errorf("architecture must be amd64 or arm64")
+	}
+	if spec.Storage.Kind != "" && spec.Storage.Kind != "bind" && spec.Storage.Kind != "volume" {
+		err = fmt.Errorf("unsupported storage kind %s", spec.Storage.Kind)
+	}
+	if spec.BootVolume != "" {
+		err = fmt.Errorf("bootVolume is only supported by KubeVirt")
+	}
+	return sandbox.Plan{Name: spec.Name, Backend: b.Name(), Digest: sandbox.Digest(spec)}, err
+}
+
+func (b *Backend) installEnv(ctx context.Context, resourceID string, env map[string]string) error {
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	data := []byte(backend.EnvFile(env))
+	if err := tw.WriteHeader(&tar.Header{Name: "lifier/", Mode: 0o700, Typeflag: tar.TypeDir}); err != nil {
+		return err
+	}
+	if err := tw.WriteHeader(&tar.Header{Name: "lifier/env", Mode: 0o600, Size: int64(len(data))}); err != nil {
+		return err
+	}
+	if _, err := tw.Write(data); err != nil {
+		return err
+	}
+	if err := tw.Close(); err != nil {
+		return err
+	}
+	out, err := b.stdin(ctx, buf.String(), "cp", "-", resourceID+":/var/lib")
+	if err != nil {
+		return err
+	}
+	if out.ExitCode != 0 {
+		return fmt.Errorf("install workload environment: %s", out.Stderr)
+	}
+	return nil
 }

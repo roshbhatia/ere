@@ -108,6 +108,12 @@ func readRequest(stdin io.Reader) (provider.Request, error) {
 
 func dispatch(ctx context.Context, backend Backend, request provider.Request) (any, error) {
 	switch request.Operation {
+	case OpValidate:
+		impl, ok := backend.(Validator)
+		if !ok {
+			return nil, fmt.Errorf("provider does not support validation")
+		}
+		return decodeThen(ctx, request, impl.Validate)
 	case OpProbe:
 		return backend.Probe(ctx)
 	case OpCreate:

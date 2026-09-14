@@ -1,5 +1,5 @@
 {
-  description = "lifier — Amp runners in composable sandboxes: containers, Virtualization.framework, QEMU/KVM";
+  description = "lifier — Amp runners in composable sandboxes: Docker, Lima, Kubernetes Pods, and KubeVirt";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -63,6 +63,17 @@
             '';
           };
 
+          checks.shell =
+            pkgs.runCommand "lifier-shellcheck"
+              {
+                src = ./.;
+                nativeBuildInputs = [ pkgs.shellcheck ];
+              }
+              ''
+                shellcheck "$src"/hack/*.sh
+                touch "$out"
+              '';
+
           devShells.default = pkgs.mkShell {
             packages = [
               pkgs.go
@@ -72,7 +83,15 @@
               pkgs.gofumpt
               pkgs.go-task
               pkgs.shfmt
+              pkgs.shellcheck
               pkgs.lima
+              pkgs.kubectl
+              pkgs.kubevirt
+              pkgs.docker-client
+              pkgs.python3
+              pkgs.openssh
+              pkgs.nodejs
+              pkgs.typescript
             ];
             shellHook = ''
               export GOTOOLCHAIN=local

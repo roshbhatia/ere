@@ -1,43 +1,62 @@
 defaultBackend: docker
-
 amp:
   apiKeySecret: env://AMP_API_KEY
-
 defaults:
-  image: lifier/amp:latest
   mountPath: /workspace
   cpus: 2
   memoryMB: 4096
   diskGB: 30
-
+providers:
+  lima:
+    vmType: auto
+  kubernetes-pod:
+    context: lifier-local
+    namespace: lifier
+    kubeconfig: ~/.kube/lifier.yaml
+  kubernetes-kubevirt:
+    context: lifier-local
+    namespace: lifier
+    kubeconfig: ~/.kube/lifier.yaml
+    sshKey: ~/.ssh/lifier
+    sshUser: lifier
 runners:
   - name: docker-example
     backend: docker
+    image: lifier/amp:latest
     workspace: .
-    runnerId: lifier-docker
-
+    runnerId: lifier-docker-example
   - name: lima-example
-    backend: vz
+    backend: lima
+    image: template://_images/ubuntu-lts
     workspace: .
-    runnerId: lifier-lima
-    provision:
+    runnerId: lifier-lima-example
+    provision: &install-amp
       - |
+        set -eu
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update
+        apt-get install -y curl ca-certificates git
         if ! test -x /opt/amp/bin/amp; then
-          curl -fsSL https://ampcode.com/install.sh -o /tmp/install-amp.sh &&
-          sudo env AMP_HOME=/opt/amp bash /tmp/install-amp.sh
+          curl -fsSL https://ampcode.com/install.sh -o /tmp/install-amp.sh
+          AMP_HOME=/opt/amp bash /tmp/install-amp.sh
+          rm /tmp/install-amp.sh
         fi
-    env:
+    env: &amp-path
       PATH: /opt/amp/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-
-  - name: k8s-example
-    backend: k8s
-    workspace: .
-    runnerId: lifier-k8s
-    provision:
-      - |
-        if ! test -x /opt/amp/bin/amp; then
-          curl -fsSL https://ampcode.com/install.sh -o /tmp/install-amp.sh &&
-          sudo env AMP_HOME=/opt/amp bash /tmp/install-amp.sh
-        fi
-    env:
-      PATH: /opt/amp/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+  - name: pod-example
+    backend: kubernetes-pod
+    image: ghcr.io/your-org/amp:version
+    runnerId: lifier-pod-example
+    storage:
+      kind: pvc
+      sizeGB: 10
+  - name: kubevirt-example
+    backend: kubernetes-kubevirt
+    architecture: arm64
+    bootVolume: amp-boot
+    runnerId: lifier-kubevirt-example
+    storage:
+      kind: pvc
+      sizeGB: 10
+    provision: *install-amp
+    env: *amp-path

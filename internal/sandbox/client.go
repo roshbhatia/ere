@@ -138,3 +138,8 @@ func (c *Client) Destroy(ctx context.Context, ref Ref) (Status, error) {
 	var out Status
 	return out, c.call(ctx, OpDestroy, ref, &out)
 }
+
+func (c *Client) Validate(ctx context.Context, spec Spec) (Plan, error) {
+	var out Plan
+	return out, c.call(ctx, OpValidate, spec, &out)
+}

@@ -39,6 +39,10 @@ func NewRootCmd(version string) *cobra.Command {
 
 	root.AddCommand(
 		newUpCmd(opts),
+		newAPICmd(opts),
+		newPlanCmd(opts),
+		newReconcileCmd(opts),
+		newMCPCmd(opts),
 		newDownCmd(opts),
 		newRemoveCmd(opts),
 		newListCmd(opts),
@@ -61,6 +65,11 @@ func (o *options) engine(progress bool) (*runner.Engine, error) {
 	reg, err := registry.Load(registry.ProviderDir(cfg.ProviderDir))
 	if err != nil {
 		return nil, err
+	}
+	for name, settings := range cfg.Providers {
+		if err := reg.Configure(name, settings.Args()); err != nil {
+			return nil, err
+		}
 	}
 	var out *os.File
 	if progress {

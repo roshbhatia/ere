@@ -35,3 +35,15 @@ func TestStatusDistinguishesMissingContainerFromDaemonFailure(t *testing.T) {
 		})
 	}
 }
+
+func TestExecRejectsForeignContainer(t *testing.T) {
+	binary := filepath.Join(t.TempDir(), "docker")
+	script := "#!/bin/sh\nif [ \"$1\" != inspect ]; then exit 88; fi\nprintf '%s' '[{\"Id\":\"foreign\",\"Config\":{\"Labels\":{}},\"State\":{\"Status\":\"running\"}}]'\n"
+	if err := os.WriteFile(binary, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	_, err := New(binary).Exec(context.Background(), sandbox.ExecRequest{Name: "test", Argv: []string{"true"}})
+	if err == nil || !strings.Contains(err.Error(), "foreign") {
+		t.Fatalf("foreign container executed: %v", err)
+	}
+}

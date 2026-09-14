@@ -1,0 +1,7 @@
+{
+  "lifier": {
+    "command": "lifier",
+    "args": ["--config", "/absolute/path/to/config.yaml", "mcp"],
+    "includeTools": ["runner_profiles", "runner_plan", "runner_ensure", "runner_status", "runner_logs", "runner_acquire", "runner_activity", "runner_allocations", "runner_drain", "runner_resume", "runner_release"]
+  }
+}

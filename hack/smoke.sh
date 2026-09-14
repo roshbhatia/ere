@@ -39,7 +39,14 @@ echo "==> start"
 "$BIN" sandbox start "$BACKEND" "$NAME"
 
 echo "==> exec"
-"$BIN" sandbox exec "$BACKEND" "$NAME" -- sh -ec 'uname -sm; test "$(cat /workspace/marker.txt)" = marker; echo guest > /workspace/guest.txt'
+guest_check="$(
+  cat << 'SCRIPT'
+uname -sm
+test "$(cat /workspace/marker.txt)" = marker
+echo guest > /workspace/guest.txt
+SCRIPT
+)"
+"${BIN}" sandbox exec "${BACKEND}" "${NAME}" -- sh -ec "${guest_check}"
 test "$(cat "$WORKDIR/guest.txt")" = guest
 
 echo "==> stop and restart"

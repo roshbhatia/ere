@@ -1,0 +1,46 @@
+images:
+  - location: https://cloud-images.ubuntu.com/releases/noble/release/ubuntu-24.04-server-cloudimg-arm64.img
+    arch: aarch64
+vmType: vz
+arch: aarch64
+nestedVirtualization: true
+cpus: 6
+memory: 12GiB
+disk: 60GiB
+mounts: []
+portForwards:
+  - guestPort: 6443
+    hostPort: 16443
+  - guestPortRange: [1, 65535]
+    ignore: true
+containerd:
+  system: false
+  user: false
+provision:
+  - mode: system
+    script: |
+      #!/bin/sh
+      set -eu
+      if ! command -v k3s >/dev/null 2>&1; then
+        curl -fsSL https://get.k3s.io -o /tmp/install-k3s.sh
+        INSTALL_K3S_VERSION='v1.36.4+k3s1' INSTALL_K3S_EXEC='server --write-kubeconfig-mode 644 --disable traefik' sh /tmp/install-k3s.sh
+        rm /tmp/install-k3s.sh
+      fi
+      for attempt in $(seq 1 60); do
+        if test -f /etc/rancher/k3s/k3s.yaml; then
+          sed 's/127.0.0.1:6443/127.0.0.1:16443/' /etc/rancher/k3s/k3s.yaml > /etc/rancher/k3s/lifier.yaml
+          chmod 644 /etc/rancher/k3s/lifier.yaml
+          break
+        fi
+        sleep 2
+      done
+      test -f /etc/rancher/k3s/lifier.yaml
+probes:
+  - script: |
+      #!/bin/sh
+      test -f /etc/rancher/k3s/lifier.yaml
+    hint: Wait for K3s to write its kubeconfig.
+copyToHost:
+  - guest: /etc/rancher/k3s/lifier.yaml
+    host: '{{.Dir}}/copied-from-guest/kubeconfig.yaml'
+    deleteOnStop: true

@@ -100,27 +100,3 @@ func EnvFile(env map[string]string) string {
 	}
 	return builder.String()
 }
-
-// EnvPath is where a rendered environment lands inside a sandbox.
-const EnvPath = "/tmp/.lifier-env"
-
-// WrapCommand builds the argv that sources the environment file and then
-// replaces the shell with the requested command.
-func WrapCommand(argv []string, logFile string) []string {
-	script := "set -a; [ -f " + EnvPath + " ] && . " + EnvPath + "; set +a; exec \"$@\""
-	if logFile != "" {
-		script = "set -a; [ -f " + EnvPath + " ] && . " + EnvPath + "; set +a; exec \"$@\" >> " + logFile + " 2>&1"
-	}
-	return append([]string{"sh", "-c", script, "lifier"}, argv...)
-}
-
-// WrapDetached builds the argv for a backend that has no detach flag of its
-// own. nohup keeps the process alive after the transport session closes.
-func WrapDetached(argv []string, logFile string) []string {
-	if logFile == "" {
-		logFile = "/dev/null"
-	}
-	script := "set -a; [ -f " + EnvPath + " ] && . " + EnvPath + "; set +a; " +
-		"nohup \"$@\" >> " + logFile + " 2>&1 < /dev/null & echo $!"
-	return append([]string{"sh", "-c", script, "lifier"}, argv...)
-}

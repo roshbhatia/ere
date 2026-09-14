@@ -1,0 +1,10 @@
+version: provider/v1
+kind: sandbox
+name: team-vms
+description: KubeVirt guest runners in an explicit cluster scope
+command: [lifier, backend, kubernetes-kubevirt, --context, team-dev, --namespace, runners, --ssh-key, /path/to/runner-key]
+actions:
+  sandbox:
+    description: VirtualMachine lifecycle with SSH guest execution
+requires:
+  commands: [kubectl, virtctl, ssh]

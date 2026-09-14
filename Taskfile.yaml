@@ -113,3 +113,19 @@ tasks:
     desc: Full pre-commit check (vet, fmt check, tests with race)
     deps: [vet, fmt:check, fmt:sh:check]
     cmd: go test -race ./...
+
+  plugin:test:
+    desc: Test Amp allocation and remote submission behavior
+    cmd: node --experimental-strip-types --test integrations/amp/plugin.test.mjs
+
+  plugin:types:
+    desc: Check plugin types against the installed Amp CLI
+    cmd: hack/check-plugin-types.sh
+
+  kubevirt:bootstrap:
+    desc: Install pinned KubeVirt and CDI in an explicit test cluster
+    cmd: hack/bootstrap-kubevirt.sh {{.CLI_ARGS}}
+
+  runner:verify:
+    desc: Verify runtime and stop/start retention for a dedicated verify- profile
+    cmd: hack/verify-runner.sh {{.CLI_ARGS}}

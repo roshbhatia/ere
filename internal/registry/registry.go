@@ -17,9 +17,12 @@ import (
 
 // Builtin names, one per shipped backend.
 const (
-	Docker = "docker"
-	VZ     = "vz"
-	QEMU   = "qemu"
+	Docker   = "docker"
+	Lima     = "lima"
+	Pod      = "kubernetes-pod"
+	KubeVirt = "kubernetes-kubevirt"
+	VZ       = "vz"
+	QEMU     = "qemu"
 )
 
 // Entry is one resolvable backend and where its manifest came from.
@@ -105,6 +108,9 @@ func (r *Registry) Client(name string) (*sandbox.Client, error) {
 // Builtins describes the shipped backends as manifests bound to self.
 func Builtins(self string) []provider.Manifest {
 	return []provider.Manifest{
+		builtin(self, Lima, "Linux VM managed by Lima", []string{"limactl"}),
+		builtin(self, Pod, "Kubernetes StatefulSet runner", []string{"kubectl"}),
+		builtin(self, KubeVirt, "KubeVirt virtual machine runner", []string{"kubectl", "virtctl", "ssh"}),
 		builtin(self, Docker,
 			"Container sandbox on the local Docker daemon",
 			[]string{"docker"}),
@@ -129,4 +135,14 @@ func builtin(self, name, description string, commands []string) provider.Manifes
 		},
 		Requires: provider.Requirements{Commands: commands},
 	}
+}
+
+func (r *Registry) Configure(name string, args []string) error {
+	entry, ok := r.entries[name]
+	if !ok {
+		return fmt.Errorf("unknown provider %q", name)
+	}
+	entry.Manifest.Command = append(entry.Manifest.Command, args...)
+	r.entries[name] = entry
+	return nil
 }

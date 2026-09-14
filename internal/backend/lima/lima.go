@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -28,9 +29,10 @@ const (
 
 // Backend drives limactl with one virtual-machine type.
 type Backend struct {
-	Binary string
-	VMType string
-	Base   string
+	Binary  string
+	VMType  string
+	Base    string
+	Managed bool
 }
 
 // New returns a lima backend. An empty vmType picks the native hypervisor:
@@ -57,6 +59,9 @@ func DefaultVMType() string {
 }
 
 func (b *Backend) Name() string {
+	if b.Managed {
+		return "lima"
+	}
 	if b.VMType == "vz" {
 		return "vz"
 	}
@@ -67,6 +72,13 @@ func instance(name string) string { return Prefix + name }
 
 func (b *Backend) Probe(ctx context.Context) (sandbox.Probe, error) {
 	probe := sandbox.Probe{Backend: b.Name(), Operations: sandbox.Operations()}
+	if b.Managed {
+		probe.Operations = append(probe.Operations, sandbox.OpValidate)
+		probe.Contract = sandbox.ContractVersion
+		probe.StorageModes = []string{"bind", "guest-disk"}
+		probe.Supervision = "systemd"
+		probe.Retention = "VM disks survive stop; host binds survive removal"
+	}
 	if b.VMType == "vz" && runtime.GOOS != "darwin" {
 		probe.Detail = "Virtualization.framework exists only on macOS"
 		return probe, nil
@@ -103,7 +115,11 @@ func (b *Backend) template(spec sandbox.Spec) string {
 		mount = DefaultMountPoint
 	}
 	var builder strings.Builder
-	fmt.Fprintf(&builder, "base: %q\n", b.Base)
+	base := b.Base
+	if spec.Image != "" {
+		base = spec.Image
+	}
+	fmt.Fprintf(&builder, "base: %q\n", base)
 	fmt.Fprintf(&builder, "vmType: %q\n", b.VMType)
 	if spec.CPUs > 0 {
 		fmt.Fprintf(&builder, "cpus: %d\n", spec.CPUs)
@@ -117,11 +133,15 @@ func (b *Backend) template(spec sandbox.Spec) string {
 	// containerd is lima's default payload and costs minutes of first boot that
 	// an agent sandbox never uses.
 	builder.WriteString("containerd:\n  system: false\n  user: false\n")
-	if spec.Workspace == "" {
+	workspace := spec.Workspace
+	if spec.Storage.Source != "" {
+		workspace = spec.Storage.Source
+	}
+	if workspace == "" {
 		builder.WriteString("mounts: []\n")
 	} else {
 		builder.WriteString("mounts:\n")
-		fmt.Fprintf(&builder, "  - location: %q\n", spec.Workspace)
+		fmt.Fprintf(&builder, "  - location: %q\n", workspace)
 		fmt.Fprintf(&builder, "    mountPoint: %q\n", mount)
 		fmt.Fprintf(&builder, "    writable: %t\n", !spec.ReadOnly)
 		if b.VMType == "vz" {
@@ -132,8 +152,24 @@ func (b *Backend) template(spec sandbox.Spec) string {
 }
 
 func (b *Backend) Create(ctx context.Context, spec sandbox.Spec) (sandbox.Status, error) {
-	if spec.Name == "" {
-		return sandbox.Status{}, fmt.Errorf("sandbox name is required")
+	if _, err := b.Validate(ctx, spec); err != nil {
+		return sandbox.Status{}, err
+	}
+	if spec.Storage.Kind != "" && spec.Storage.Kind != "bind" && spec.Storage.Kind != "guest-disk" {
+		return sandbox.Status{}, fmt.Errorf("lima supports bind or guest-disk storage")
+	}
+	if spec.BootVolume != "" {
+		return sandbox.Status{}, fmt.Errorf("lima does not support bootVolume")
+	}
+	existing, err := b.Status(ctx, sandbox.Ref{Name: spec.Name})
+	if err != nil {
+		return existing, err
+	}
+	if existing.State != sandbox.StateAbsent {
+		if b.Managed && existing.Digest != sandbox.Digest(spec) {
+			return existing, fmt.Errorf("configuration changed or VM is unmanaged; explicit replacement required")
+		}
+		return existing, nil
 	}
 	file, err := os.CreateTemp("", "lifier-lima-*.yaml")
 	if err != nil {
@@ -153,58 +189,74 @@ func (b *Backend) Create(ctx context.Context, spec sandbox.Spec) (sandbox.Status
 		"--name", instance(spec.Name), file.Name()); err != nil {
 		return sandbox.Status{}, err
 	}
+	if b.Managed {
+		records, err := b.instances(ctx)
+		if err != nil {
+			return sandbox.Status{}, err
+		}
+		id, err := backend.LoadIdentity("lima|"+b.VMType, spec.Name)
+		if err != nil {
+			return sandbox.Status{}, err
+		}
+		found := false
+		for _, record := range records {
+			if record.Name == instance(spec.Name) {
+				if err := os.WriteFile(filepath.Join(record.Dir, "lifier-owner"), []byte(id.Owner), 0o600); err != nil {
+					return sandbox.Status{}, err
+				}
+				found = true
+			}
+		}
+		if !found {
+			return sandbox.Status{}, fmt.Errorf("created Lima instance is absent")
+		}
+		if err := b.saveSpec(spec); err != nil {
+			return sandbox.Status{}, err
+		}
+	}
 	return b.Status(ctx, sandbox.Ref{Name: spec.Name})
 }
 
 func (b *Backend) Start(ctx context.Context, ref sandbox.Ref) (sandbox.Status, error) {
+	if b.Managed {
+		status, err := b.Status(ctx, ref)
+		if err != nil || status.State == sandbox.StateAbsent {
+			return status, err
+		}
+	}
 	sandbox.Progress(ctx, "start", "booting "+instance(ref.Name)+" (first boot pulls an image)")
 	if _, err := backend.Check(ctx, b.Binary, "start", "--tty=false", instance(ref.Name)); err != nil {
 		return sandbox.Status{}, err
+	}
+	if b.Managed {
+		if err := b.installWorkload(ctx, ref.Name); err != nil {
+			return sandbox.Status{}, err
+		}
 	}
 	return b.Status(ctx, ref)
 }
 
 func (b *Backend) Exec(ctx context.Context, req sandbox.ExecRequest) (sandbox.ExecResult, error) {
-	if len(req.Argv) == 0 {
-		return sandbox.ExecResult{}, fmt.Errorf("exec requires a command")
-	}
-	if len(req.Env) > 0 {
-		if err := b.writeEnv(ctx, req.Name, req.Env); err != nil {
+	if b.Managed {
+		status, err := b.Status(ctx, sandbox.Ref{Name: req.Name})
+		if err != nil {
 			return sandbox.ExecResult{}, err
 		}
+		if status.State == sandbox.StateAbsent {
+			return sandbox.ExecResult{}, fmt.Errorf("sandbox is absent")
+		}
 	}
-	// limactl defaults the guest working directory to the host's, and lima maps
-	// the host home into the guest, so an empty workdir would silently run the
-	// command against host files.
-	workdir := req.Workdir
-	if workdir == "" {
-		workdir = "/"
-	}
-	args := []string{"shell", "--tty=false", "--workdir", workdir}
-	args = append(args, instance(req.Name), "--")
-	if req.Detach {
-		args = append(args, backend.WrapDetached(req.Argv, req.LogFile)...)
-	} else {
-		args = append(args, backend.WrapCommand(req.Argv, req.LogFile)...)
-	}
-	out, err := backend.Run(ctx, b.Binary, args...)
+	script, err := backend.ExecScript(req)
 	if err != nil {
 		return sandbox.ExecResult{}, err
 	}
-	return sandbox.ExecResult{ExitCode: out.ExitCode, Stdout: out.Stdout, Stderr: out.Stderr}, nil
-}
-
-func (b *Backend) writeEnv(ctx context.Context, name string, env map[string]string) error {
-	out, err := backend.RunStdin(ctx, backend.EnvFile(env), b.Binary,
-		"shell", "--tty=false", instance(name), "--",
-		"sh", "-c", "umask 077; cat > "+backend.EnvPath)
-	if err != nil {
-		return err
+	args := []string{"shell", "--tty=false", "--workdir", "/", instance(req.Name), "--"}
+	if b.Managed {
+		args = append(args, "sudo")
 	}
-	if out.ExitCode != 0 {
-		return fmt.Errorf("write sandbox environment: %s", strings.TrimSpace(out.Stderr))
-	}
-	return nil
+	args = append(args, "sh", "-s")
+	out, err := backend.RunStdin(ctx, script, b.Binary, args...)
+	return sandbox.ExecResult{ExitCode: out.ExitCode, Stdout: out.Stdout, Stderr: out.Stderr}, err
 }
 
 type listed struct {
@@ -245,6 +297,26 @@ func (b *Backend) Status(ctx context.Context, ref sandbox.Ref) (sandbox.Status, 
 		if record.Name != instance(ref.Name) {
 			continue
 		}
+		if record.VMType != b.VMType {
+			return status, fmt.Errorf("VM belongs to hypervisor %s", record.VMType)
+		}
+		if b.Managed {
+			id, err := backend.LoadIdentity("lima|"+b.VMType, ref.Name)
+			if err != nil {
+				return status, err
+			}
+			owner, err := os.ReadFile(filepath.Join(record.Dir, "lifier-owner"))
+			if err != nil || string(owner) != id.Owner {
+				return status, fmt.Errorf("refusing foreign or replaced Lima instance")
+			}
+			status.ResourceID = id.Owner
+			spec, err := b.loadSpec(ref.Name)
+			if err != nil {
+				return status, err
+			}
+			status.Digest = sandbox.Digest(spec)
+			status.Managed = spec.Workload != nil
+		}
 		status.State = mapState(record.Status)
 		status.Detail = record.Status
 		status.Image = record.VMType + "/" + record.Arch
@@ -279,6 +351,13 @@ func (b *Backend) List(ctx context.Context) (sandbox.List, error) {
 		if !strings.HasPrefix(record.Name, Prefix) || record.VMType != b.VMType {
 			continue
 		}
+		if b.Managed {
+			status, err := b.Status(ctx, sandbox.Ref{Name: strings.TrimPrefix(record.Name, Prefix)})
+			if err == nil {
+				list.Sandboxes = append(list.Sandboxes, status)
+			}
+			continue
+		}
 		list.Sandboxes = append(list.Sandboxes, sandbox.Status{
 			Name:    strings.TrimPrefix(record.Name, Prefix),
 			Backend: b.Name(),
@@ -292,6 +371,20 @@ func (b *Backend) List(ctx context.Context) (sandbox.List, error) {
 }
 
 func (b *Backend) Logs(ctx context.Context, req sandbox.LogRequest) (sandbox.Logs, error) {
+	if b.Managed {
+		lines := req.Lines
+		if lines <= 0 {
+			lines = 200
+		}
+		out, err := b.Exec(ctx, sandbox.ExecRequest{Name: req.Name, Argv: []string{"sudo", "journalctl", "-u", "lifier-workload", "-n", strconv.Itoa(lines), "--no-pager"}})
+		if err != nil {
+			return sandbox.Logs{}, err
+		}
+		if out.ExitCode != 0 {
+			return sandbox.Logs{}, fmt.Errorf("guest logs: %s", out.Stderr)
+		}
+		return sandbox.Logs{Lines: strings.Split(strings.TrimRight(out.Stdout, "\n"), "\n")}, nil
+	}
 	lines := req.Lines
 	if lines <= 0 {
 		lines = 200
@@ -309,6 +402,12 @@ func (b *Backend) Logs(ctx context.Context, req sandbox.LogRequest) (sandbox.Log
 }
 
 func (b *Backend) Stop(ctx context.Context, ref sandbox.Ref) (sandbox.Status, error) {
+	if b.Managed {
+		status, err := b.Status(ctx, ref)
+		if err != nil || status.State == sandbox.StateAbsent {
+			return status, err
+		}
+	}
 	out, err := backend.Run(ctx, b.Binary, "stop", "--tty=false", instance(ref.Name))
 	if err != nil {
 		return sandbox.Status{}, err
@@ -320,6 +419,12 @@ func (b *Backend) Stop(ctx context.Context, ref sandbox.Ref) (sandbox.Status, er
 }
 
 func (b *Backend) Destroy(ctx context.Context, ref sandbox.Ref) (sandbox.Status, error) {
+	if b.Managed {
+		status, err := b.Status(ctx, ref)
+		if err != nil || status.State == sandbox.StateAbsent {
+			return status, err
+		}
+	}
 	out, err := backend.Run(ctx, b.Binary, "delete", "--tty=false", "--force", instance(ref.Name))
 	if err != nil {
 		return sandbox.Status{}, err
@@ -327,9 +432,38 @@ func (b *Backend) Destroy(ctx context.Context, ref sandbox.Ref) (sandbox.Status,
 	if out.ExitCode != 0 && !absent(out.Stderr) {
 		return sandbox.Status{}, fmt.Errorf("delete %s: %s", ref.Name, strings.TrimSpace(out.Stderr))
 	}
+	if b.Managed {
+		path, err := b.specPath(ref.Name)
+		if err != nil {
+			return sandbox.Status{}, err
+		}
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return sandbox.Status{}, err
+		}
+	}
 	return sandbox.Status{Name: ref.Name, Backend: b.Name(), State: sandbox.StateAbsent}, nil
 }
 
 func absent(stderr string) bool {
 	return strings.Contains(stderr, "not found") || strings.Contains(stderr, "does not exist")
+}
+
+func (b *Backend) Validate(ctx context.Context, spec sandbox.Spec) (sandbox.Plan, error) {
+	err := sandbox.Validate(spec)
+	if spec.Storage.Class != "" || spec.Storage.SizeGB != 0 {
+		return sandbox.Plan{}, fmt.Errorf("lima uses diskGB for guest disk size")
+	}
+	if spec.Storage.Kind == "guest-disk" && (spec.Storage.Source != "" || spec.Workspace != "" || spec.ReadOnly) {
+		return sandbox.Plan{}, fmt.Errorf("guest-disk storage cannot specify a host source or readOnly")
+	}
+	if spec.Architecture != "" && spec.Architecture != runtime.GOARCH {
+		return sandbox.Plan{}, fmt.Errorf("lima provider requires host architecture %s", runtime.GOARCH)
+	}
+	if spec.Storage.Kind != "" && spec.Storage.Kind != "bind" && spec.Storage.Kind != "guest-disk" {
+		err = fmt.Errorf("unsupported storage kind %s", spec.Storage.Kind)
+	}
+	if spec.BootVolume != "" {
+		err = fmt.Errorf("bootVolume is only supported by KubeVirt")
+	}
+	return sandbox.Plan{Name: spec.Name, Backend: b.Name(), Digest: sandbox.Digest(spec)}, err
 }

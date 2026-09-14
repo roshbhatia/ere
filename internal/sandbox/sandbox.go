@@ -14,15 +14,16 @@ const (
 
 // Operations a backend may implement. Probe reports which ones it serves.
 const (
-	OpProbe   = "probe"
-	OpCreate  = "create"
-	OpStart   = "start"
-	OpExec    = "exec"
-	OpStatus  = "status"
-	OpList    = "list"
-	OpLogs    = "logs"
-	OpStop    = "stop"
-	OpDestroy = "destroy"
+	OpProbe    = "probe"
+	OpValidate = "validate"
+	OpCreate   = "create"
+	OpStart    = "start"
+	OpExec     = "exec"
+	OpStatus   = "status"
+	OpList     = "list"
+	OpLogs     = "logs"
+	OpStop     = "stop"
+	OpDestroy  = "destroy"
 )
 
 // State is the lifecycle position of one sandbox.
@@ -36,19 +37,22 @@ const (
 	StateUnknown  State = "unknown"
 )
 
-// Spec is the sandbox a backend is asked to materialize. It says nothing about
-// Amp: the agent reaches the sandbox through Exec like any other command.
+// Spec declares compute and an optional supervised workload. It contains no Amp-specific behavior.
 type Spec struct {
-	Name      string            `json:"name"`
-	Image     string            `json:"image,omitempty"`
-	Workspace string            `json:"workspace,omitempty"`
-	MountPath string            `json:"mountPath,omitempty"`
-	ReadOnly  bool              `json:"readOnly,omitempty"`
-	Env       map[string]string `json:"env,omitempty"`
-	CPUs      int               `json:"cpus,omitempty"`
-	MemoryMB  int               `json:"memoryMB,omitempty"`
-	DiskGB    int               `json:"diskGB,omitempty"`
-	Labels    map[string]string `json:"labels,omitempty"`
+	Name         string            `json:"name"`
+	Storage      Storage           `json:"storage,omitempty"`
+	Architecture string            `json:"architecture,omitempty"`
+	BootVolume   string            `json:"bootVolume,omitempty"`
+	Workload     *Workload         `json:"workload,omitempty"`
+	Image        string            `json:"image,omitempty"`
+	Workspace    string            `json:"workspace,omitempty"`
+	MountPath    string            `json:"mountPath,omitempty"`
+	ReadOnly     bool              `json:"readOnly,omitempty"`
+	Env          map[string]string `json:"env,omitempty"`
+	CPUs         int               `json:"cpus,omitempty"`
+	MemoryMB     int               `json:"memoryMB,omitempty"`
+	DiskGB       int               `json:"diskGB,omitempty"`
+	Labels       map[string]string `json:"labels,omitempty"`
 }
 
 // Ref names an existing sandbox.
@@ -88,12 +92,15 @@ type Logs struct {
 
 // Status is what a backend knows about one sandbox.
 type Status struct {
-	Name    string `json:"name"`
-	Backend string `json:"backend"`
-	State   State  `json:"state"`
-	Image   string `json:"image,omitempty"`
-	Address string `json:"address,omitempty"`
-	Detail  string `json:"detail,omitempty"`
+	Name       string `json:"name"`
+	Backend    string `json:"backend"`
+	State      State  `json:"state"`
+	Image      string `json:"image,omitempty"`
+	Address    string `json:"address,omitempty"`
+	ResourceID string `json:"resourceId,omitempty"`
+	Digest     string `json:"digest,omitempty"`
+	Managed    bool   `json:"managed,omitempty"`
+	Detail     string `json:"detail,omitempty"`
 }
 
 // List is every sandbox a backend owns on this host.
@@ -103,10 +110,14 @@ type List struct {
 
 // Probe reports whether the backend can run here and what it implements.
 type Probe struct {
-	Backend    string   `json:"backend"`
-	Available  bool     `json:"available"`
-	Operations []string `json:"operations"`
-	Detail     string   `json:"detail,omitempty"`
+	Backend      string   `json:"backend"`
+	Contract     string   `json:"contract,omitempty"`
+	StorageModes []string `json:"storageModes,omitempty"`
+	Supervision  string   `json:"supervision,omitempty"`
+	Retention    string   `json:"retention,omitempty"`
+	Available    bool     `json:"available"`
+	Operations   []string `json:"operations"`
+	Detail       string   `json:"detail,omitempty"`
 }
 
 // Backend is the in-process shape a shipped backend implements. The serve
@@ -128,4 +139,8 @@ type Backend interface {
 // Operations is the full set, in lifecycle order.
 func Operations() []string {
 	return []string{OpProbe, OpCreate, OpStart, OpExec, OpStatus, OpList, OpLogs, OpStop, OpDestroy}
+}
+
+type Validator interface {
+	Validate(context.Context, Spec) (Plan, error)
 }

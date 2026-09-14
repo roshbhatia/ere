@@ -76,7 +76,7 @@ func (e *Engine) selected(names []string) ([]config.Runner, error) {
 
 func (e *Engine) spec(runner config.Runner) (sandbox.Spec, error) {
 	workspace := runner.Workspace
-	if workspace != "" {
+	if workspace != "" && runner.Storage.Kind != "volume" && runner.Storage.Kind != "pvc" {
 		expanded, err := filepath.Abs(paths.ExpandHome(workspace))
 		if err != nil {
 			return sandbox.Spec{}, fmt.Errorf("runner %s workspace: %w", runner.Name, err)
@@ -84,15 +84,18 @@ func (e *Engine) spec(runner config.Runner) (sandbox.Spec, error) {
 		workspace = expanded
 	}
 	return sandbox.Spec{
-		Name:      runner.Name,
-		Image:     runner.Image,
-		Workspace: workspace,
-		MountPath: runner.MountPath,
-		ReadOnly:  runner.ReadOnly,
-		CPUs:      runner.CPUs,
-		MemoryMB:  runner.MemoryMB,
-		DiskGB:    runner.DiskGB,
-		Labels:    map[string]string{"lifier.runner-id": runner.RunnerID},
+		Name:         runner.Name,
+		Storage:      runner.Storage,
+		BootVolume:   runner.BootVolume,
+		Architecture: runner.Architecture,
+		Image:        runner.Image,
+		Workspace:    workspace,
+		MountPath:    runner.MountPath,
+		ReadOnly:     runner.ReadOnly,
+		CPUs:         runner.CPUs,
+		MemoryMB:     runner.MemoryMB,
+		DiskGB:       runner.DiskGB,
+		Labels:       map[string]string{"lifier.runner-id": runner.RunnerID},
 	}, nil
 }
 
@@ -133,14 +136,44 @@ func (e *Engine) Up(ctx context.Context, names []string, restart bool) error {
 }
 
 func (e *Engine) up(ctx context.Context, runner config.Runner, restart bool) error {
+	store, err := e.lock(ctx, runner)
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+	if restart {
+		if err := store.CanStop(); err != nil {
+			return err
+		}
+	}
 	client, err := e.client(runner)
 	if err != nil {
 		return err
+	}
+	env, err := e.environment(ctx, runner)
+	if err != nil {
+		return err
+	}
+	if env[amp.EnvAPIKey] == "" {
+		return fmt.Errorf(
+			"runner %s has no Amp credential: set amp.apiKeySecret, or %s under the runner's env or secrets. "+
+				"Without one amp opens an interactive login prompt inside the sandbox and waits there",
+			runner.Name, amp.EnvAPIKey)
 	}
 	ref := sandbox.Ref{Name: runner.Name}
 	status, err := client.Status(ctx, ref)
 	if err != nil {
 		return err
+	}
+	probe, err := client.Probe(ctx)
+	if err != nil {
+		return err
+	}
+	if !probe.Available && probe.Contract == sandbox.ContractVersion {
+		return fmt.Errorf("provider %s: %s", runner.Backend, probe.Detail)
+	}
+	if status.Managed || (status.State == sandbox.StateAbsent && probe.Contract == sandbox.ContractVersion) {
+		return e.upManaged(ctx, client, runner, env, restart)
 	}
 	if status.State == sandbox.StateAbsent {
 		spec, err := e.spec(runner)
@@ -159,21 +192,21 @@ func (e *Engine) up(ctx context.Context, runner config.Runner, restart bool) err
 		}
 	}
 
-	env, err := e.environment(ctx, runner)
-	if err != nil {
-		return err
-	}
-	if env[amp.EnvAPIKey] == "" {
-		return fmt.Errorf(
-			"runner %s has no Amp credential: set amp.apiKeySecret, or %s under the runner's env or secrets. "+
-				"Without one amp opens an interactive login prompt inside the sandbox and waits there",
-			runner.Name, amp.EnvAPIKey)
-	}
 	workdir := runner.MountPath
 	if workdir == "" {
 		workdir = "/workspace"
 	}
 
+	if !restart {
+		running, err := e.agentRunning(ctx, client, runner)
+		if err != nil {
+			return err
+		}
+		if running {
+			e.report("%s: amp runner %s is already up", runner.Name, runner.RunnerID)
+			return nil
+		}
+	}
 	for _, command := range runner.Provision {
 		e.report("%s: provision %s", runner.Name, command)
 		result, err := client.Exec(ctx, sandbox.ExecRequest{
@@ -263,9 +296,21 @@ func (e *Engine) agentRunning(ctx context.Context, client *sandbox.Client, runne
 	if err != nil {
 		return false, err
 	}
-	needle := "--runner-id " + runner.RunnerID
+	if result.ExitCode != 0 {
+		return false, fmt.Errorf("read process table: %s", result.Stderr)
+	}
 	for _, line := range strings.Split(result.Stdout, "\n") {
-		if strings.Contains(line, needle) && strings.Contains(line, "--no-tui") {
+		fields := strings.Fields(line)
+		idMatch, noTUI := false, false
+		for i, field := range fields {
+			if field == "--no-tui" {
+				noTUI = true
+			}
+			if field == "--runner-id" && i+1 < len(fields) && fields[i+1] == runner.RunnerID {
+				idMatch = true
+			}
+		}
+		if idMatch && noTUI {
 			return true, nil
 		}
 	}
@@ -274,18 +319,32 @@ func (e *Engine) agentRunning(ctx context.Context, client *sandbox.Client, runne
 
 func (e *Engine) stopAgent(ctx context.Context, client *sandbox.Client, runner config.Runner) error {
 	e.report("%s: stopping the running amp runner", runner.Name)
-	_, err := client.Exec(ctx, sandbox.ExecRequest{
+	out, err := client.Exec(ctx, sandbox.ExecRequest{
 		Name: runner.Name,
-		Argv: []string{"sh", "-c", "pkill -f -- '--runner-id " + runner.RunnerID + "' || true"},
+		Argv: []string{"sh", "-c", "pkill -f -- '[a]mp .*--no-tui .*--runner-id " + runner.RunnerID + "( |$)'; code=$?; [ \"$code\" -eq 0 ] || [ \"$code\" -eq 1 ]"},
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	if out.ExitCode != 0 {
+		return fmt.Errorf("stop amp: %s", out.Stderr)
+	}
+	return nil
 }
 
 // Down stops the sandbox of every selected runner, keeping its disk.
 func (e *Engine) Down(ctx context.Context, names []string) error {
 	return e.each(ctx, names, func(ctx context.Context, client *sandbox.Client, runner config.Runner) error {
+		store, err := e.lock(ctx, runner)
+		if err != nil {
+			return err
+		}
+		defer store.Close()
+		if err := store.CanStop(); err != nil {
+			return err
+		}
 		e.report("%s: stopping sandbox", runner.Name)
-		_, err := client.Stop(ctx, sandbox.Ref{Name: runner.Name})
+		_, err = client.Stop(ctx, sandbox.Ref{Name: runner.Name})
 		return err
 	})
 }
@@ -293,8 +352,16 @@ func (e *Engine) Down(ctx context.Context, names []string) error {
 // Remove destroys the sandbox of every selected runner.
 func (e *Engine) Remove(ctx context.Context, names []string) error {
 	return e.each(ctx, names, func(ctx context.Context, client *sandbox.Client, runner config.Runner) error {
+		store, err := e.lock(ctx, runner)
+		if err != nil {
+			return err
+		}
+		defer store.Close()
+		if err := store.CanStop(); err != nil {
+			return err
+		}
 		e.report("%s: destroying sandbox", runner.Name)
-		_, err := client.Destroy(ctx, sandbox.Ref{Name: runner.Name})
+		_, err = client.Destroy(ctx, sandbox.Ref{Name: runner.Name})
 		return err
 	})
 }

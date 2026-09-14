@@ -1,164 +1,219 @@
 # lifier
 
-Run [Amp runners](https://ampcode.com/docs/cli/runners) in Docker containers or local [Lima](https://lima-vm.io) virtual machines.
-Use Lima with K3s when the runner needs Kubernetes.
+Run [Amp runners](https://ampcode.com/docs/cli/runners) on Docker, Lima, Kubernetes Pods, or Kubernetes KubeVirt VMs.
+Lifier owns compute and workspace lifecycle. Amp owns threads and model-provider authentication, including its ChatGPT subscription integration.
 
-Amp supports a linked ChatGPT subscription with your own compute.
-[Self-hosted runners require no Amp monthly plan](https://ampcode.com/news/free-agent).
-Model usage follows your selected provider and its limits.
+## Providers
 
-## Start here
+| Provider | Compute | Supervision | Workspace retention |
+|---|---|---|---|
+| `docker` | Container on the selected Docker context | Container entrypoint and restart policy | Bind mounts and named volumes survive removal |
+| `lima` | Local Linux VM; `vmType: auto`, `vz`, or `qemu` | systemd | Guest disks survive stop; host mounts survive removal |
+| `kubernetes-pod` | StatefulSet with one runner Pod | Kubernetes restarts and replaces containers | PVC survives Pod replacement and runner removal |
+| `kubernetes-kubevirt` | KubeVirt VirtualMachine | VM run strategy and guest systemd | Workspace and boot PVCs survive compute removal |
 
-Enter the repository's development shell, then build and check the CLI:
+`vz` and `qemu` remain available for existing configurations and runner IDs.
+Existing runners created with detached Amp processes retain that behavior until explicitly replaced.
+A Lima-hosted Kubernetes cluster is a development fixture. The Kubernetes providers connect to any compatible cluster with an explicit context and namespace.
 
-```bash
+## Build and configure
+
+```sh
 nix develop
 task build
-task check
-task lint
 export PATH="$PWD:$PATH"
-lifier doctor
+lifier backends
 ```
 
-Connect your ChatGPT subscription once, on the host:
+Copy [examples/lifier.yaml](examples/lifier.yaml) to `~/.config/lifier/config.yaml`, or pass `--config` explicitly.
+Run named profiles while configuring the examples; bare `up` selects every declared runner.
+The example image registry, kubeconfig, context, and SSH key are placeholders to replace.
 
-```bash
-amp login
+Configure your model provider through Amp itself. Lifier does not copy ChatGPT login files or implement a separate subscription adapter.
+An Amp API credential authenticates the runner connection; it is separate from model-provider billing.
+Reference it with `amp.apiKeySecret: env://AMP_API_KEY`, `op://...`, or a runner secret reference.
+Do not put credentials in provider command arguments, labels, or committed files.
+Link the subscription once on your Amp account:
+
+```sh
 amp config model-providers add-chatgpt-subscription
 amp config model-providers list
 ```
 
-Skip the connection command if the list already shows your active subscription.
-The connection belongs to your Amp account, so runners use the same connection.
-The sandbox needs an Amp API key, not your ChatGPT password or browser tokens.
-See [Amp's subscription setup](https://ampcode.com/docs/the-dial).
+Subscription billing follows Amp model routing. It does not cover every model or mode.
+See [Amp model providers](https://ampcode.com/docs/the-dial) and [runners](https://ampcode.com/docs/cli/runners).
 
-Set `AMP_API_KEY` through your secret manager or a hidden terminal prompt:
-
-```bash
-read -rs AMP_API_KEY
-export AMP_API_KEY
+```sh
+lifier --config examples/lifier.yaml plan docker-example
+lifier --config examples/lifier.yaml up docker-example
+lifier --config examples/lifier.yaml ls --json
+amp --executor runner:lifier-docker-example --mode high -x 'Inspect this workspace'
 ```
 
-Paste your Amp API key and press Enter.
-The examples resolve `env://AMP_API_KEY` at launch.
-You can instead set `amp.apiKeySecret` to an `op://vault/item/field` reference.
+`up` validates credentials before creating compute. New managed runners use native supervision.
+A running process does not prove remote registration; submit an Amp task to prove the complete connection.
 
 ## Docker
 
-Start your local Docker daemon, then run:
-
-```bash
+```sh
 task image:build
 lifier --config examples/lifier.yaml up docker-example
-lifier --config examples/lifier.yaml ls
-lifier --config examples/lifier.yaml logs docker-example
-lifier --config examples/lifier.yaml exec docker-example -- amp --version
 ```
 
-The example mounts the current directory at `/workspace`.
-Run these commands from the repository root, or change `workspace` to your project's absolute path.
-Select `lifier-docker` in Amp's location picker to create a thread on this runner.
+A Docker bind path belongs to the daemon host. For remote daemons, configure a daemon-host path or a named volume:
+
+```yaml
+providers:
+  docker:
+    context: remote-dev
+runners:
+  - name: remote-worker
+    backend: docker
+    image: your-registry/amp:version
+    storage:
+      kind: volume
+      source: remote-worker-workspace
+```
+
+The named volume is retained. Lifier does not upload a local directory into a remote daemon automatically.
+Credentials are installed through stdin in a private container file; command execution uses an independent stdin environment for each invocation.
 
 ## Lima
 
-On macOS, `vz` uses Virtualization.framework.
-On Linux, change the example's backend to `qemu`; KVM accelerates it when available.
-
-```bash
+```sh
 lifier --config examples/lifier.yaml up lima-example
-lifier --config examples/lifier.yaml exec lima-example -- amp --version
-lifier --config examples/lifier.yaml logs lima-example
+lifier --config examples/lifier.yaml exec lima-example -- uname -a
 ```
 
-The example installs Amp at `/opt/amp/bin/amp` inside the VM.
-Only the declared workspace is mounted, and that mount is writable unless `readOnly: true` is set.
-Select `lifier-lima` in Amp's location picker, or send a task from the CLI:
+The canonical provider selects VZ on macOS and QEMU on Linux. Templates are configurable through `image`.
+Use a host workspace mount or `storage: {kind: guest-disk}` for a workspace inside the VM.
+VM removal deletes guest disks. Stop the runner to retain those disks.
+The default Linux guest must provide systemd and passwordless sudo for the Lima user.
 
-```bash
-amp --executor runner:lifier-lima --mode high -x "List the files in the current directory."
+## Kubernetes Pod
+
+Prepare a namespace and an image containing Amp, a POSIX shell, and the tools your tasks need.
+Push the [Docker image](images/amp/Dockerfile) to your registry and set the profile's `image`.
+The provider supports PVC storage or explicitly ephemeral storage. It rejects local workspace paths.
+
+```sh
+kubectl --context your-context create namespace lifier
+lifier --config examples/lifier.yaml plan pod-example
+lifier --config examples/lifier.yaml up pod-example
 ```
 
-## Kubernetes through Lima
+An empty PVC source creates an owned workspace claim. `storage.source` names an existing external PVC.
+Runner removal retains both kinds of PVC. Lifier never deletes external claims.
+The Pod does not mount a Kubernetes service-account token.
+A replacement Pod restores the declared workload and uses the same workspace claim.
 
-The `k8s` provider uses [Lima's K3s template](https://github.com/lima-vm/lima/blob/master/templates/k3s.yaml).
-Amp runs inside the VM and can manage its local Kubernetes cluster with `kubectl`.
-This example does not deploy Amp as a Kubernetes Pod.
+## Kubernetes KubeVirt
 
-Install the provider manifest:
+Install KubeVirt in the target cluster and configure a guest SSH key.
+Use an existing boot PVC or a container-disk image. Container disks have ephemeral root filesystems.
+For persistent boot storage, import a cloud image with CDI, for example [boot-volume.yaml](examples/kubernetes/boot-volume.yaml).
+Change its architecture-specific image URL when targeting AMD64.
 
-```bash
-mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/lifier/providers"
-cp examples/providers/k8s.yaml "${XDG_CONFIG_HOME:-$HOME/.config}/lifier/providers/k8s.yaml"
+```sh
+ssh-keygen -t ed25519 -f ~/.ssh/lifier
+kubectl --context your-context apply -f examples/kubernetes/boot-volume.yaml
+lifier --config examples/lifier.yaml up kubevirt-example
 ```
 
-On Linux, change `vz` to `qemu` in that manifest.
-Keep `lifier` on `PATH` so the provider can start it.
+The cloud image must support cloud-init and systemd. Set `architecture` to match the guest image and eligible cluster nodes.
+Lifier configures the guest user, pins an SSH host key, mounts the workspace disk, and installs the supervised workload.
+Guest execution uses SSH through `virtctl port-forward`; it does not execute commands in the launcher container.
+Existing boot images used with another cloud-init identity need preparation before reuse.
 
-```bash
-lifier --config examples/lifier.yaml up k8s-example
-lifier --config examples/lifier.yaml exec k8s-example -- kubectl get nodes
-lifier --config examples/lifier.yaml exec k8s-example -- kubectl get pods -A
+For local development on an Apple M3 or newer, [the Lima fixture](examples/lima/kubernetes.yaml) enables nested virtualization and installs pinned K3s.
+Its kubeconfig remains separate from the host's default context:
+
+```sh
+limactl start --tty=false --name lifier-provider-test examples/lima/kubernetes.yaml
+kubectl --kubeconfig ~/.lima/lifier-provider-test/copied-from-guest/kubeconfig.yaml get nodes
 ```
 
-Select `lifier-k8s` in Amp's location picker.
-Use `lifier exec` for cluster commands to keep them scoped to this VM.
+Install pinned KubeVirt and CDI explicitly in that test cluster:
 
-## Lifecycle and configuration
-
-`up` creates and starts the sandbox, provisions it, and starts Amp.
-`up --restart` restarts Amp; `down` stops the sandbox and preserves its disk.
-`rm` destroys the sandbox and its disk.
-`ls` checks the Amp process; it does not prove that Amp's server accepted the connection.
-Check the location picker before assigning work.
-Stop a runner when you finish:
-
-```bash
-lifier --config examples/lifier.yaml down lima-example
+```sh
+task kubevirt:bootstrap -- ~/.lima/lifier-provider-test/copied-from-guest/kubeconfig.yaml default
 ```
 
-Configuration defaults to `$XDG_CONFIG_HOME/lifier/config.yaml`.
-Use `--config` to select another file.
-`lifier config schema` prints the JSON Schema; `lifier config show` prints effective values.
-Runner IDs must be valid hostnames.
+The repository Nix shell supplies `kubectl` and `virtctl`. The fixture uses host API port 16443.
+The fixture does not install KubeVirt or CDI implicitly during runner creation.
 
-Secret references support `op://`, `env://`, and `file://`; other strings are literal values.
-Resolved secrets enter the sandbox over stdin in a private environment file.
-Do not put credentials in the examples or commit them.
+See [the provider contract](docs/providers.md) for operations, ownership, storage, and allocation state.
 
-## Providers
+## Lifecycle and automation
 
-Each backend is an executable that implements [provider/v1](https://github.com/roshbhatia/provider-spec).
-It reads one JSON request and writes progress events followed by one result.
-Built-in providers use `lifier backend docker`, `lifier backend vz`, or `lifier backend qemu`.
-Manifests in `$XDG_CONFIG_HOME/lifier/providers/` can add or replace providers.
-The [Kubernetes manifest](examples/providers/k8s.yaml) shows how to select a Lima base template.
+```sh
+lifier plan worker
+lifier up worker
+lifier logs worker -n 100
+lifier down worker
+lifier rm worker
+```
+
+`plan` identifies creates, starts, and replacements. Changed managed configurations require explicit compute replacement.
+Check retention before removing a runner: container root filesystems and Lima guest disks are not retained by `rm`.
+`down` retains durable disks; explicitly ephemeral Pod storage is lost when the Pod is removed.
+Provisioning uses a digest in the root filesystem. It reruns after a fresh root filesystem or a changed provision declaration.
+
+`lifier reconcile worker` repeats reconciliation until interrupted. Run it under a host service manager when continuous reconciliation is needed.
+Native supervision continues when the CLI exits. The controller never expires or deletes workspaces automatically.
+
+Automation uses durable allocations, keyed by Amp runner identity. File locks serialize local controller mutations.
+`runner_drain` blocks new managed allocations. `down`, `rm`, and `up --restart` reject unreleased allocations.
+Approval waits, timeouts, and unknown activity retain the allocation. A released allocation ID cannot be reused.
+Direct assignments through Amp bypass managed allocations. An empty allocation list does not prove no direct task is running.
+Only one controller state directory should manage a runner; this is not a distributed locking service.
+
+```sh
+lifier api runner_profiles
+lifier api runner_acquire --input '{"runner":"worker","id":"request-123"}'
+lifier api runner_allocations --input '{"runner":"worker"}'
+lifier api runner_drain --input '{"runner":"worker"}'
+```
+
+## Amp plugin and MCP
+
+The [Amp plugin](integrations/amp/lifier) exposes tools, a palette command, and `lifier:runner-workflow`.
+Install the directory into `.amp/plugins/lifier` at the operator project's Git root, or the operator host's Amp system plugin directory.
+Edit its `settings.ts` to select the lifier binary and configuration. Keep it outside worker images.
+
+```sh
+mkdir -p .amp/plugins
+cp -R integrations/amp/lifier .amp/plugins/lifier
+amp plugins list
+amp skills list
+```
+
+Use `runner_run` to allocate a profile, prepare its runtime, create a private native Amp thread, attach labels, and submit work.
+Select the built-in mode explicitly. The installed Amp API rejects runner-executor creation from plugin tools. The plugin uses Amp CLI execution with an allocation label instead.
+It marks the allocation unknown before submission, then records the returned thread ID. An interrupted submission remains allocated for recovery.
+`runner_poll` recovers activity after a timeout. `runner_release` reads a fresh thread export and matches idle activity to the final assistant message before releasing the allocation.
+It retains compute and storage. Finishing a turn never destroys the runner.
+Thread labels are `lifier`, `lifier-<provider>`, and `lifier-allocation-<id>`; these are project conventions, not reserved Amp labels.
+
+For another client, `lifier mcp` serves the same engine over stdio. Use [examples/mcp.json](examples/mcp.json) for Amp's MCP configuration shape.
+The MCP server has no separate scheduler or lifecycle implementation. It accepts configured runner names, not arbitrary shell commands.
+
+Kubernetes resources carry `app.kubernetes.io/*` labels plus lifier ownership metadata.
+Stored native UIDs and owner-reference checks establish ownership; display labels alone do not.
+Controller state and guest credentials live in private files under `$XDG_STATE_HOME/lifier`, defaulting to `~/.local/state/lifier`.
+Preserve this state while resources exist. Losing it requires explicit resource recovery, not automatic adoption by name.
 
 ## Verification
 
-Run sandbox checks without an Amp credential:
-
-```bash
-hack/smoke.sh docker
-hack/smoke.sh vz
-hack/smoke.sh k8s
-```
-
-Each check creates a disposable sandbox, verifies the workspace mount, restarts it, and deletes it.
-Use `qemu` instead of `vz` on Linux.
-The Kubernetes check requires the provider manifest above.
-
-```bash
+```sh
+task check
+task lint
+task plugin:test
 nix build
 nix flake check
 ```
 
-## Layout
-
-- `cmd/lifier`: CLI entry point.
-- `internal/runner`: fleet lifecycle and Amp launch checks.
-- `internal/backend`: Docker and Lima implementations.
-- `internal/sandbox`: provider contract, client, and serve loop.
-- `internal/config`, `internal/registry`, `internal/secret`: configuration and provider resolution.
-- `images/amp`: Docker image.
-- `examples`: Docker, Lima, and Kubernetes configurations.
+`task plugin:types` checks against the installed Amp API without vendoring upstream declarations.
+The live smoke tests require their matching daemon or cluster and create only named test resources.
+See [verification notes](docs/verification.md) for tested versions, lifecycle evidence, and limitations.
+External providers still use `provider/v1` framing; managed built-ins advertise `sandbox/v2` capabilities and validation.

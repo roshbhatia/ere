@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	goconfig "github.com/roshbhatia/go-utils/config"
+	"github.com/roshbhatia/go-utils/paths"
+	"github.com/roshbhatia/lifier/internal/sandbox"
 )
 
 // Name is the config directory and file stem under XDG config home.
@@ -18,11 +20,12 @@ const EnvPrefix = "LIFIER"
 
 // Config is one host's declared runner fleet.
 type Config struct {
-	DefaultBackend string   `json:"defaultBackend,omitempty" yaml:"defaultBackend,omitempty"`
-	ProviderDir    string   `json:"providerDir,omitempty"    yaml:"providerDir,omitempty"`
-	Amp            Amp      `json:"amp,omitempty"            yaml:"amp,omitempty"`
-	Defaults       Defaults `json:"defaults,omitempty"       yaml:"defaults,omitempty"`
-	Runners        []Runner `json:"runners,omitempty"        yaml:"runners,omitempty"`
+	Providers      map[string]Provider `json:"providers,omitempty" yaml:"providers,omitempty"`
+	DefaultBackend string              `json:"defaultBackend,omitempty" yaml:"defaultBackend,omitempty"`
+	ProviderDir    string              `json:"providerDir,omitempty"    yaml:"providerDir,omitempty"`
+	Amp            Amp                 `json:"amp,omitempty"            yaml:"amp,omitempty"`
+	Defaults       Defaults            `json:"defaults,omitempty"       yaml:"defaults,omitempty"`
+	Runners        []Runner            `json:"runners,omitempty"        yaml:"runners,omitempty"`
 }
 
 // Amp describes how the agent is launched inside every sandbox. lifier never
@@ -49,6 +52,9 @@ type Defaults struct {
 
 // Runner is one sandbox holding one Amp runner.
 type Runner struct {
+	Architecture          string            `json:"architecture,omitempty" yaml:"architecture,omitempty"`
+	Storage               sandbox.Storage   `json:"storage,omitempty" yaml:"storage,omitempty"`
+	BootVolume            string            `json:"bootVolume,omitempty" yaml:"bootVolume,omitempty"`
 	Name                  string            `json:"name"                            yaml:"name"`
 	Backend               string            `json:"backend,omitempty"               yaml:"backend,omitempty"`
 	Workspace             string            `json:"workspace,omitempty"             yaml:"workspace,omitempty"`
@@ -116,7 +122,7 @@ func (c *Config) applyDefaults() {
 		if runner.MemoryMB == 0 {
 			runner.MemoryMB = c.Defaults.MemoryMB
 		}
-		if runner.DiskGB == 0 {
+		if runner.DiskGB == 0 && (runner.Backend != "docker" && runner.Backend != "kubernetes-pod" && runner.Backend != "kubernetes-kubevirt") {
 			runner.DiskGB = c.Defaults.DiskGB
 		}
 		if len(runner.Provision) == 0 {
@@ -137,6 +143,7 @@ var hostname = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$
 // Validate rejects a config that would fail late, inside a sandbox.
 func (c Config) Validate() error {
 	seen := make(map[string]bool, len(c.Runners))
+	ids := map[string]bool{}
 	for _, runner := range c.Runners {
 		if strings.TrimSpace(runner.Name) == "" {
 			return fmt.Errorf("every runner needs a name")
@@ -145,6 +152,11 @@ func (c Config) Validate() error {
 			return fmt.Errorf("duplicate runner %q", runner.Name)
 		}
 		seen[runner.Name] = true
+		id := strings.ToLower(runner.RunnerID)
+		if ids[id] {
+			return fmt.Errorf("duplicate runnerId %q", runner.RunnerID)
+		}
+		ids[id] = true
 		if !hostname.MatchString(runner.RunnerID) {
 			return fmt.Errorf("runner %q has runnerId %q, which is not a valid hostname", runner.Name, runner.RunnerID)
 		}
@@ -172,4 +184,23 @@ func (c Config) Names() []string {
 		names = append(names, runner.Name)
 	}
 	return names
+}
+
+type Provider struct {
+	Context    string `json:"context,omitempty" yaml:"context,omitempty"`
+	Namespace  string `json:"namespace,omitempty" yaml:"namespace,omitempty"`
+	Kubeconfig string `json:"kubeconfig,omitempty" yaml:"kubeconfig,omitempty"`
+	VMType     string `json:"vmType,omitempty" yaml:"vmType,omitempty"`
+	SSHKey     string `json:"sshKey,omitempty" yaml:"sshKey,omitempty"`
+	SSHUser    string `json:"sshUser,omitempty" yaml:"sshUser,omitempty"`
+}
+
+func (p Provider) Args() []string {
+	var args []string
+	for _, pair := range [][2]string{{"context", p.Context}, {"namespace", p.Namespace}, {"kubeconfig", paths.ExpandHome(p.Kubeconfig)}, {"vm-type", p.VMType}, {"ssh-key", paths.ExpandHome(p.SSHKey)}, {"ssh-user", p.SSHUser}} {
+		if pair[1] != "" {
+			args = append(args, "--"+pair[0], pair[1])
+		}
+	}
+	return args
 }
