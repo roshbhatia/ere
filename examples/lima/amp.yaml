@@ -1,0 +1,31 @@
+base: template:_images/ubuntu-lts
+cpus: 2
+memory: 4GiB
+disk: 30GiB
+mounts: []
+containerd:
+  system: false
+  user: false
+provision:
+  - mode: system
+    script: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update
+      apt-get install -y curl ca-certificates git
+      if ! test -x /opt/amp/bin/amp; then
+        installer="$(mktemp)"
+        trap 'rm -f "${installer}"' EXIT
+        curl -fsSL https://ampcode.com/install.sh -o "${installer}"
+        env HOME=/root AMP_HOME=/opt/amp bash "${installer}"
+      fi
+      if ! test /usr/local/bin/amp -ef /opt/amp/bin/amp; then
+        ln -s /opt/amp/bin/amp /usr/local/bin/amp
+      fi
+probes:
+  - script: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      /usr/local/bin/amp --version
+    hint: Wait for Amp installation to finish.

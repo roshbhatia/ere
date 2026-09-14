@@ -90,6 +90,24 @@ Use a host workspace mount or `storage: {kind: guest-disk}` for a workspace insi
 VM removal deletes guest disks. Stop the runner to retain those disks.
 The default Linux guest must provide systemd and passwordless sudo for the Lima user.
 
+The [Amp Lima template](examples/lima/amp.yaml) installs Amp, Git, and CA certificates.
+It exposes `amp` through `/usr/local/bin/amp` for guest shells and leaves host directories unmounted.
+Use its absolute host path as a Lima runner's `image`; Lifier supplies the workspace mount and manages the runner process.
+For example: `image: /absolute/path/to/lifier/examples/lima/amp.yaml`.
+The existing example profile also exposes Amp through `/usr/local/bin/amp` during provisioning.
+
+To create a standalone VM with the [Lima template commands](https://lima-vm.io/docs/templates/):
+
+```sh
+limactl start --tty=false --name amp-shell examples/lima/amp.yaml
+limactl shell amp-shell amp --version
+limactl shell amp-shell
+```
+
+The standalone template installs the CLI. Configure authentication and start a runner separately, or use Lifier to manage both.
+A shell user has separate Amp credentials from Lifier's managed workload.
+An existing managed runner already runs Amp; opening its shell does not require another `amp --no-tui` process.
+
 ## Kubernetes Pod
 
 Prepare a namespace and an image containing Amp, a POSIX shell, and the tools your tasks need.

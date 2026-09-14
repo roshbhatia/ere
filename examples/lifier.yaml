@@ -41,6 +41,9 @@ runners:
           AMP_HOME=/opt/amp bash /tmp/install-amp.sh
           rm /tmp/install-amp.sh
         fi
+        if ! test /usr/local/bin/amp -ef /opt/amp/bin/amp; then
+          ln -s /opt/amp/bin/amp /usr/local/bin/amp
+        fi
     env: &amp-path
       PATH: /opt/amp/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
   - name: pod-example
