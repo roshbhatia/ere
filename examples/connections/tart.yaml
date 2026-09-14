@@ -1,0 +1,22 @@
+amp:
+  binary: /opt/amp/bin/amp
+  apiKeySecret: env://AMP_API_KEY
+runners:
+  - name: macos-dev
+    runnerId: ere-macos-dev
+    backend: tart
+    image: ghcr.io/cirruslabs/macos-sequoia-base:latest
+    mountPath: /Users/Shared/ere/macos-dev
+    storage:
+      kind: guest-disk
+    cpus: 4
+    memoryMB: 8192
+    diskGB: 60
+    provision:
+      - |
+        set -eu
+        installer=$(mktemp)
+        trap 'rm -f "$installer"' EXIT
+        curl -fsSL https://ampcode.com/install.sh -o "$installer"
+        AMP_HOME=/opt/amp bash "$installer"
+        chmod 755 /opt/amp /opt/amp/bin /opt/amp/bin/amp

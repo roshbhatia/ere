@@ -108,6 +108,28 @@ func readRequest(stdin io.Reader) (provider.Request, error) {
 
 func dispatch(ctx context.Context, backend Backend, request provider.Request) (any, error) {
 	switch request.Operation {
+	case OpSealTemplate:
+		var ref Ref
+		if err := json.Unmarshal(request.Input, &ref); err != nil {
+			return nil, err
+		}
+		sealer, ok := backend.(TemplateSealer)
+		if !ok {
+			return nil, fmt.Errorf("backend does not support prepared templates")
+		}
+		return sealer.SealTemplate(ctx, ref)
+	case OpClone:
+		impl, ok := backend.(Cloner)
+		if !ok {
+			return nil, fmt.Errorf("provider does not support native cloning; use a workspace fork")
+		}
+		return decodeThen(ctx, request, impl.Clone)
+	case OpConnect:
+		impl, ok := backend.(Connector)
+		if !ok {
+			return nil, fmt.Errorf("provider does not support interactive connections")
+		}
+		return decodeThen(ctx, request, impl.Connect)
 	case OpValidate:
 		impl, ok := backend.(Validator)
 		if !ok {

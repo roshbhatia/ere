@@ -1,0 +1,28 @@
+providers:
+  linux-host:
+    kind: ssh
+    host: build-host
+    sshUser: ere
+    sshKey: ~/.ssh/ere
+amp:
+  apiKeySecret: env://AMP_API_KEY
+  remoteControlTerminal: true
+runners:
+  - name: ssh-dev
+    runnerId: ere-ssh-dev
+    backend: linux-host
+    mountPath: /srv/ere/ssh-dev
+    storage:
+      kind: guest-disk
+    provision:
+      - |
+        set -eu
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update
+        apt-get install -y curl ca-certificates git
+        installer=$(mktemp)
+        trap 'rm -f "$installer"' EXIT
+        curl -fsSL https://ampcode.com/install.sh -o "$installer"
+        AMP_HOME=/opt/amp bash "$installer"
+        chmod 755 /opt/amp /opt/amp/bin /opt/amp/bin/amp
+        ln -sfn /opt/amp/bin/amp /usr/local/bin/amp

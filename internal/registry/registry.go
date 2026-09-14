@@ -108,6 +108,10 @@ func (r *Registry) Client(name string) (*sandbox.Client, error) {
 // Builtins describes the shipped backends as manifests bound to self.
 func Builtins(self string) []provider.Manifest {
 	return []provider.Manifest{
+		builtin(self, "incus", "Incus Linux container or VM", []string{"incus"}),
+		builtin(self, "tart", "Tart macOS VM", []string{"tart", "launchctl"}),
+		builtin(self, "multipass", "Multipass Ubuntu VM with ownership snapshot", []string{"multipass"}),
+		builtin(self, "ssh", "Dedicated workload on an existing SSH host", []string{"ssh"}),
 		builtin(self, Lima, "Linux VM managed by Lima", []string{"limactl"}),
 		builtin(self, Pod, "Kubernetes StatefulSet runner", []string{"kubectl"}),
 		builtin(self, KubeVirt, "KubeVirt virtual machine runner", []string{"kubectl", "virtctl", "ssh"}),
@@ -144,5 +148,16 @@ func (r *Registry) Configure(name string, args []string) error {
 	}
 	entry.Manifest.Command = append(entry.Manifest.Command, args...)
 	r.entries[name] = entry
+	return nil
+}
+
+func (r *Registry) Alias(name, kind string) error {
+	entry, ok := r.entries[kind]
+	if !ok {
+		return fmt.Errorf("unknown provider kind %q", kind)
+	}
+	entry.Manifest.Name = name
+	entry.Manifest.Command = append([]string(nil), entry.Manifest.Command...)
+	r.add(entry)
 	return nil
 }

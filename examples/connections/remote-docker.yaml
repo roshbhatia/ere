@@ -1,0 +1,15 @@
+providers:
+  remote-docker:
+    kind: docker
+    context: build-host
+amp:
+  apiKeySecret: env://AMP_API_KEY
+  remoteControlTerminal: true
+runners:
+  - name: remote-dev
+    runnerId: ere-remote-dev
+    backend: remote-docker
+    image: ere/amp:latest
+    storage:
+      kind: volume
+      source: ere-workspace

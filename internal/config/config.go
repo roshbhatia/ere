@@ -4,6 +4,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 
@@ -32,6 +33,8 @@ type Config struct {
 // holds an Amp credential itself: it names a secret reference and resolves it
 // at launch.
 type Amp struct {
+	ClientArgs            []string `json:"clientArgs,omitempty" yaml:"clientArgs,omitempty"`
+	ClientBinary          string   `json:"clientBinary,omitempty" yaml:"clientBinary,omitempty"`
 	Binary                string   `json:"binary,omitempty"                yaml:"binary,omitempty"`
 	URL                   string   `json:"url,omitempty"                   yaml:"url,omitempty"`
 	APIKeySecret          string   `json:"apiKeySecret,omitempty"          yaml:"apiKeySecret,omitempty"`
@@ -82,6 +85,11 @@ func New() Config {
 
 // Load reads the config file and environment overrides over the defaults.
 func Load(path string) (Config, error) {
+	var err error
+	path, err = Path(path)
+	if err != nil {
+		return Config{}, err
+	}
 	cfg, err := goconfig.Load(New(), goconfig.Options{Name: Name, EnvPrefix: EnvPrefix, Path: path})
 	if err != nil {
 		return cfg, err
@@ -92,6 +100,13 @@ func Load(path string) (Config, error) {
 
 // Path reports which file Load would read.
 func Path(path string) (string, error) {
+	if path == "" && os.Getenv("ERE_CONFIG") == "" {
+		if _, err := os.Stat("ere.yaml"); err == nil {
+			path = "ere.yaml"
+		} else if !os.IsNotExist(err) {
+			return "", err
+		}
+	}
 	return goconfig.Path(goconfig.Options{Name: Name, EnvPrefix: EnvPrefix, Path: path})
 }
 
@@ -110,19 +125,23 @@ func (c *Config) applyDefaults() {
 		if runner.Backend == "" {
 			runner.Backend = c.Defaults.Backend
 		}
-		if runner.Image == "" {
+		kind := runner.Backend
+		if p := c.Providers[kind]; p.Kind != "" {
+			kind = p.Kind
+		}
+		if runner.Image == "" && kind != "ssh" {
 			runner.Image = c.Defaults.Image
 		}
 		if runner.MountPath == "" {
 			runner.MountPath = c.Defaults.MountPath
 		}
-		if runner.CPUs == 0 {
+		if runner.CPUs == 0 && kind != "ssh" {
 			runner.CPUs = c.Defaults.CPUs
 		}
-		if runner.MemoryMB == 0 {
+		if runner.MemoryMB == 0 && kind != "ssh" {
 			runner.MemoryMB = c.Defaults.MemoryMB
 		}
-		if runner.DiskGB == 0 && (runner.Backend != "docker" && runner.Backend != "kubernetes-pod" && runner.Backend != "kubernetes-kubevirt") {
+		if runner.DiskGB == 0 && (kind != "ssh" && kind != "docker" && kind != "kubernetes-pod" && kind != "kubernetes-kubevirt") {
 			runner.DiskGB = c.Defaults.DiskGB
 		}
 		if len(runner.Provision) == 0 {
@@ -142,6 +161,11 @@ var hostname = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$
 
 // Validate rejects a config that would fail late, inside a sandbox.
 func (c Config) Validate() error {
+	for name, p := range c.Providers {
+		if p.Kind != "" && c.Providers[p.Kind].Kind != "" {
+			return fmt.Errorf("provider %s must name a base kind, not alias %s", name, p.Kind)
+		}
+	}
 	seen := make(map[string]bool, len(c.Runners))
 	ids := map[string]bool{}
 	for _, runner := range c.Runners {
@@ -187,6 +211,11 @@ func (c Config) Names() []string {
 }
 
 type Provider struct {
+	Project    string `json:"project,omitempty" yaml:"project,omitempty"`
+	Remote     string `json:"remote,omitempty" yaml:"remote,omitempty"`
+	Kind       string `json:"kind,omitempty" yaml:"kind,omitempty"`
+	Binary     string `json:"binary,omitempty" yaml:"binary,omitempty"`
+	Host       string `json:"host,omitempty" yaml:"host,omitempty"`
 	Context    string `json:"context,omitempty" yaml:"context,omitempty"`
 	Namespace  string `json:"namespace,omitempty" yaml:"namespace,omitempty"`
 	Kubeconfig string `json:"kubeconfig,omitempty" yaml:"kubeconfig,omitempty"`
@@ -197,7 +226,7 @@ type Provider struct {
 
 func (p Provider) Args() []string {
 	var args []string
-	for _, pair := range [][2]string{{"context", p.Context}, {"namespace", p.Namespace}, {"kubeconfig", paths.ExpandHome(p.Kubeconfig)}, {"vm-type", p.VMType}, {"ssh-key", paths.ExpandHome(p.SSHKey)}, {"ssh-user", p.SSHUser}} {
+	for _, pair := range [][2]string{{"project", p.Project}, {"remote", p.Remote}, {"binary", p.Binary}, {"host", p.Host}, {"context", p.Context}, {"namespace", p.Namespace}, {"kubeconfig", paths.ExpandHome(p.Kubeconfig)}, {"vm-type", p.VMType}, {"ssh-key", paths.ExpandHome(p.SSHKey)}, {"ssh-user", p.SSHUser}} {
 		if pair[1] != "" {
 			args = append(args, "--"+pair[0], pair[1])
 		}

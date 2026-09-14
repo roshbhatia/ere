@@ -144,7 +144,7 @@ func (b *Backend) owned(ctx context.Context, name string) (*record, backend.Iden
 }
 
 func (b *Backend) Probe(ctx context.Context) (sandbox.Probe, error) {
-	p := sandbox.Probe{Backend: b.Name(), Operations: append(sandbox.Operations(), sandbox.OpValidate), Contract: sandbox.ContractVersion, StorageModes: []string{"pvc", "ephemeral"}, Supervision: "StatefulSet", Retention: "PVCs retained; ephemeral storage is lost"}
+	p := sandbox.Probe{Backend: b.Name(), Operations: append(sandbox.Operations(), sandbox.OpValidate, sandbox.OpConnect), Contract: sandbox.ContractVersion, StorageModes: []string{"pvc", "ephemeral"}, Supervision: "StatefulSet", Retention: "PVCs retained; ephemeral storage is lost"}
 	if b.KubeVirt {
 		p.Supervision = "VirtualMachine and systemd"
 		p.Retention = "workspace and boot PVCs retained; container-disk roots are ephemeral"

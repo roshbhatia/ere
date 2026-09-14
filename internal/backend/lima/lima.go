@@ -73,7 +73,7 @@ func instance(name string) string { return Prefix + name }
 func (b *Backend) Probe(ctx context.Context) (sandbox.Probe, error) {
 	probe := sandbox.Probe{Backend: b.Name(), Operations: sandbox.Operations()}
 	if b.Managed {
-		probe.Operations = append(probe.Operations, sandbox.OpValidate)
+		probe.Operations = append(probe.Operations, sandbox.OpValidate, sandbox.OpConnect, sandbox.OpClone, sandbox.OpSealTemplate)
 		probe.Contract = sandbox.ContractVersion
 		probe.StorageModes = []string{"bind", "guest-disk"}
 		probe.Supervision = "systemd"

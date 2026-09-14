@@ -41,6 +41,13 @@ func (o *options) backendClient(name string) (*sandbox.Client, error) {
 		return nil, err
 	}
 	for provider, settings := range cfg.Providers {
+		if settings.Kind != "" {
+			if err := reg.Alias(provider, settings.Kind); err != nil {
+				return nil, err
+			}
+		}
+	}
+	for provider, settings := range cfg.Providers {
 		if err := reg.Configure(provider, settings.Args()); err != nil {
 			return nil, err
 		}

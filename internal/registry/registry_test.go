@@ -32,7 +32,7 @@ func TestLoadWithoutAProviderDirectoryReturnsTheBuiltins(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(reg.Names(), []string{Docker, KubeVirt, Pod, Lima, QEMU, VZ}) {
+	if !slices.Equal(reg.Names(), []string{Docker, "incus", KubeVirt, Pod, Lima, "multipass", QEMU, "ssh", "tart", VZ}) {
 		t.Fatalf("names = %v", reg.Names())
 	}
 }
@@ -66,7 +66,7 @@ actions:
 	if !slices.Equal(entries[index].Manifest.Command, []string{"podman-sandbox"}) {
 		t.Fatalf("command = %v", entries[index].Manifest.Command)
 	}
-	if len(reg.Names()) != 6 {
+	if len(reg.Names()) != len(Builtins("ere")) {
 		t.Fatalf("an override must not add a backend: %v", reg.Names())
 	}
 }

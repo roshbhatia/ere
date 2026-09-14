@@ -81,3 +81,29 @@ func TestSchemaIsGenerated(t *testing.T) {
 		t.Fatal("schema is empty")
 	}
 }
+
+func TestNamedProviderDefaultsUseBaseKind(t *testing.T) {
+	path := write(t, `providers:
+  remote-container:
+    kind: docker
+  host:
+    kind: ssh
+    host: build-host
+runners:
+  - name: container
+    backend: remote-container
+  - name: host
+    backend: host
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Runners[0].DiskGB != 0 {
+		t.Fatal("docker alias inherited VM disk")
+	}
+	r := cfg.Runners[1]
+	if r.CPUs != 0 || r.MemoryMB != 0 || r.DiskGB != 0 {
+		t.Fatal("SSH inherited managed host resources")
+	}
+}

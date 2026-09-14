@@ -43,7 +43,7 @@ func (b *Backend) Name() string { return "docker" }
 func container(name string) string { return Prefix + name }
 
 func (b *Backend) Probe(ctx context.Context) (sandbox.Probe, error) {
-	probe := sandbox.Probe{Backend: b.Name(), Operations: append(sandbox.Operations(), sandbox.OpValidate), Contract: sandbox.ContractVersion, StorageModes: []string{"bind", "volume"}, Supervision: "container-restart", Retention: "binds and named volumes survive removal"}
+	probe := sandbox.Probe{Backend: b.Name(), Operations: append(sandbox.Operations(), sandbox.OpValidate, sandbox.OpConnect), Contract: sandbox.ContractVersion, StorageModes: []string{"bind", "volume"}, Supervision: "container-restart", Retention: "binds and named volumes survive removal"}
 	if !backend.Available(b.Binary) {
 		probe.Detail = b.Binary + " is not on PATH"
 		return probe, nil

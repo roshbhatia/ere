@@ -1,0 +1,14 @@
+providers:
+  podman:
+    kind: docker
+    binary: podman
+amp:
+  apiKeySecret: env://AMP_API_KEY
+runners:
+  - name: podman-dev
+    runnerId: ere-podman-dev
+    backend: podman
+    image: localhost/ere/amp:latest
+    storage:
+      kind: volume
+      source: ere-workspace

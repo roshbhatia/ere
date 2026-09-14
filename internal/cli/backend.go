@@ -7,6 +7,7 @@ import (
 	"github.com/roshbhatia/ere/internal/backend/docker"
 	"github.com/roshbhatia/ere/internal/backend/kubernetes"
 	"github.com/roshbhatia/ere/internal/backend/lima"
+	"github.com/roshbhatia/ere/internal/backend/machine"
 	"github.com/roshbhatia/ere/internal/registry"
 	"github.com/roshbhatia/ere/internal/sandbox"
 	"github.com/spf13/cobra"
@@ -16,7 +17,7 @@ import (
 // reached the same way an external one is: a process, one request frame in, one
 // result frame out.
 func newBackendCmd() *cobra.Command {
-	var binary, base, vmType string
+	var binary, base, vmType, host, project, remote string
 	var kube kubernetes.Backend
 
 	cmd := &cobra.Command{
@@ -32,6 +33,12 @@ func newBackendCmd() *cobra.Command {
 				kube.Binary = binary
 				kube.KubeVirt = args[0] == registry.KubeVirt
 				impl = &kube
+			case "incus", "tart", "multipass", "ssh":
+				user := kube.SSHUser
+				if !cmd.Flags().Changed("ssh-user") {
+					user = ""
+				}
+				impl = &machine.Backend{Kind: args[0], Binary: binary, Host: host, Project: project, Remote: remote, VMType: vmType, SSHKey: kube.SSHKey, SSHUser: user}
 			case registry.Lima:
 				impl = lima.NewManaged(binary, vmType, base)
 			default:
@@ -46,6 +53,9 @@ func newBackendCmd() *cobra.Command {
 			return sandbox.Serve(cmd.Context(), impl, os.Stdin, os.Stdout)
 		},
 	}
+	cmd.Flags().StringVar(&host, "host", "", "SSH host")
+	cmd.Flags().StringVar(&project, "project", "", "Incus project")
+	cmd.Flags().StringVar(&remote, "remote", "", "Incus remote")
 	cmd.Flags().StringVar(&binary, "binary", "", "override the backend's command (docker, podman, limactl)")
 	cmd.Flags().StringVar(&base, "base", "", "lima base template for the virtual-machine backends")
 	cmd.Flags().StringVar(&vmType, "vm-type", "", "Lima hypervisor")

@@ -49,15 +49,19 @@ func ExecScript(req sandbox.ExecRequest) (string, error) {
 }
 
 func WorkloadScript(work sandbox.Workload) string {
-	script := "set -eu\numask 077\nmkdir -p /var/lib/ere\n"
+	return WorkloadScriptAt(work, "/var/lib/ere")
+}
+
+func WorkloadScriptAt(work sandbox.Workload, dir string) string {
+	script := "set -eu\numask 077\nmkdir -p " + Quote(dir) + "\n"
 	if work.Workdir != "" {
 		script += "mkdir -p " + Quote(work.Workdir) + "\ncd " + Quote(work.Workdir) + "\n"
 	}
 	digest := sandbox.Digest(work.Provision)
-	script += "if [ \"$(cat /var/lib/ere/bootstrap.digest 2>/dev/null || true)\" != " + Quote(digest) + " ]; then\n"
+	script += "if [ \"$(cat " + Quote(dir+"/bootstrap.digest") + " 2>/dev/null || true)\" != " + Quote(digest) + " ]; then\n"
 	for _, command := range work.Provision {
 		script += "sh -lec " + Quote(command) + "\n"
 	}
-	script += "printf '%s' " + Quote(digest) + " > /var/lib/ere/bootstrap.digest\nfi\nexec " + ShellArgv(work.Argv) + "\n"
+	script += "printf '%s' " + Quote(digest) + " > " + Quote(dir+"/bootstrap.digest") + "\nfi\nexec " + ShellArgv(work.Argv) + "\n"
 	return script
 }
