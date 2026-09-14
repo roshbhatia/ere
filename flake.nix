@@ -52,14 +52,14 @@
             name = "lifier-nixfmt";
             runtimeInputs = [
               pkgs.fd
-              pkgs.nixfmt-rfc-style
+              pkgs.nixfmt
             ];
             text = ''
-              if [ "$#" -gt 0 ]; then
+              if [ "$#" -gt 0 ] && [ "$1" != "--check" ]; then
                 exec nixfmt "$@"
               fi
 
-              exec fd --extension nix --type file --exec-batch nixfmt
+              exec fd --extension nix --type file --exec-batch nixfmt "$@"
             '';
           };
 

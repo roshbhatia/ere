@@ -7,7 +7,8 @@
 set -euo pipefail
 
 BACKEND="${1:-docker}"
-NAME="${LIFIER_SMOKE_NAME:-smoke}"
+NAME="${LIFIER_SMOKE_NAME:-smoke-$$}"
+CREATED=false
 BIN="${LIFIER_BIN:-./lifier}"
 IMAGE="${LIFIER_SMOKE_IMAGE:-debian:bookworm-slim}"
 # Docker Desktop shares the home directory, not macOS's private temp root, so a
@@ -15,7 +16,9 @@ IMAGE="${LIFIER_SMOKE_IMAGE:-debian:bookworm-slim}"
 WORKDIR="$(mktemp -d "${HOME}/.lifier-smoke.XXXXXX")"
 
 cleanup() {
-  "$BIN" sandbox destroy "$BACKEND" "$NAME" > /dev/null 2>&1 || true
+  if "$CREATED"; then
+    "$BIN" sandbox destroy "$BACKEND" "$NAME" > /dev/null
+  fi
   rm -rf "$WORKDIR"
 }
 trap cleanup EXIT
@@ -30,12 +33,19 @@ case "$BACKEND" in
   docker) "$BIN" sandbox create "$BACKEND" "$NAME" --image "$IMAGE" --workspace "$WORKDIR" ;;
   *) "$BIN" sandbox create "$BACKEND" "$NAME" --workspace "$WORKDIR" --cpus 2 --memory-mb 2048 --disk-gb 20 ;;
 esac
+CREATED=true
 
 echo "==> start"
 "$BIN" sandbox start "$BACKEND" "$NAME"
 
 echo "==> exec"
-"$BIN" sandbox exec "$BACKEND" "$NAME" -- sh -c 'uname -sm; cat /workspace/marker.txt'
+"$BIN" sandbox exec "$BACKEND" "$NAME" -- sh -ec 'uname -sm; test "$(cat /workspace/marker.txt)" = marker; echo guest > /workspace/guest.txt'
+test "$(cat "$WORKDIR/guest.txt")" = guest
+
+echo "==> stop and restart"
+"$BIN" sandbox stop "$BACKEND" "$NAME"
+"$BIN" sandbox start "$BACKEND" "$NAME"
+"$BIN" sandbox exec "$BACKEND" "$NAME" -- cat /workspace/guest.txt
 
 echo "==> list"
 "$BIN" sandbox ls "$BACKEND"

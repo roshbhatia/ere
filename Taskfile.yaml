@@ -74,7 +74,12 @@ tasks:
 
   fmt:check:
     desc: Check Go formatting without writing
-    cmd: gofumpt -l . | grep . && exit 1 || true
+    cmd: |
+      unformatted=$(gofumpt -l .)
+      if [ -n "$unformatted" ]; then
+        echo "$unformatted" >&2
+        exit 1
+      fi
 
   fmt:sh:
     desc: Format shell scripts in hack/ with shfmt
