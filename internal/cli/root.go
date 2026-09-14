@@ -6,7 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
+
+	"github.com/roshbhatia/go-utils/cell"
 
 	"github.com/roshbhatia/ere/internal/config"
 	"github.com/roshbhatia/ere/internal/registry"
@@ -38,6 +41,17 @@ func NewRootCmd(version string) *cobra.Command {
 	root.PersistentFlags().StringVar(&opts.opBinary, "op", "op", "1Password CLI used to resolve op:// secrets")
 
 	root.AddCommand(
+		newInitCmd(),
+		newPluginCmd(opts),
+		newThreadCmd(opts, true),
+		newThreadCmd(opts, false),
+		newContinueCmd(opts),
+		newThreadsCmd(opts),
+		newInspectCmd(opts),
+		newShellCmd(opts),
+		newCloneCmd(opts),
+		newTemplateCmd(opts),
+		newEventsCmd(opts),
 		newUpCmd(opts),
 		newAPICmd(opts),
 		newPlanCmd(opts),
@@ -54,6 +68,12 @@ func NewRootCmd(version string) *cobra.Command {
 		newSandboxCmd(opts),
 		newBackendCmd(),
 	)
+	for _, command := range root.Commands() {
+		switch command.Name() {
+		case "up", "down", "rm", "ls", "logs", "exec", "plan", "start", "run", "inspect", "shell":
+			command.ValidArgsFunction = runnerCompletion(opts)
+		}
+	}
 	return root
 }
 
@@ -65,6 +85,13 @@ func (o *options) engine(progress bool) (*runner.Engine, error) {
 	reg, err := registry.Load(registry.ProviderDir(cfg.ProviderDir))
 	if err != nil {
 		return nil, err
+	}
+	for name, settings := range cfg.Providers {
+		if settings.Kind != "" {
+			if err := reg.Alias(name, settings.Kind); err != nil {
+				return nil, err
+			}
+		}
 	}
 	for name, settings := range cfg.Providers {
 		if err := reg.Configure(name, settings.Args()); err != nil {
@@ -99,10 +126,14 @@ func newUpCmd(opts *options) *cobra.Command {
 }
 
 func newDownCmd(opts *options) *cobra.Command {
-	return &cobra.Command{
+	var all bool
+	cmd := &cobra.Command{
 		Use:   "down [runner...]",
 		Short: "Stop the sandboxes of the selected runners, keeping their disks",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 && !all {
+				return fmt.Errorf("name a runner or pass --all")
+			}
 			engine, err := opts.engine(true)
 			if err != nil {
 				return err
@@ -110,14 +141,20 @@ func newDownCmd(opts *options) *cobra.Command {
 			return engine.Down(cmd.Context(), args)
 		},
 	}
+	cmd.Flags().BoolVar(&all, "all", false, "stop every configured runner")
+	return cmd
 }
 
 func newRemoveCmd(opts *options) *cobra.Command {
-	return &cobra.Command{
+	var all bool
+	cmd := &cobra.Command{
 		Use:     "rm [runner...]",
 		Aliases: []string{"destroy"},
 		Short:   "Destroy the sandboxes of the selected runners",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 && !all {
+				return fmt.Errorf("name a runner or pass --all")
+			}
 			engine, err := opts.engine(true)
 			if err != nil {
 				return err
@@ -125,6 +162,8 @@ func newRemoveCmd(opts *options) *cobra.Command {
 			return engine.Remove(cmd.Context(), args)
 		},
 	}
+	cmd.Flags().BoolVar(&all, "all", false, "remove every configured runner")
+	return cmd
 }
 
 func newListCmd(opts *options) *cobra.Command {
@@ -208,12 +247,35 @@ func newExecCmd(opts *options) *cobra.Command {
 func newDoctorCmd(opts *options) *cobra.Command {
 	var asJSON bool
 	cmd := &cobra.Command{
-		Use:   "doctor",
-		Short: "Probe every registered backend on this host",
+		Use:   "doctor [runner]",
+		Short: "Diagnose a runner or probe registered backends",
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			engine, err := opts.engine(false)
 			if err != nil {
 				return err
+			}
+			if len(args) == 1 {
+				checks, err := engine.Diagnose(cmd.Context(), args[0])
+				if err != nil {
+					return err
+				}
+				if asJSON {
+					return writeJSON(cmd.OutOrStdout(), checks)
+				}
+				rows := [][]string{{"CHECK", "STATUS", "DETAIL"}}
+				failed := false
+				for _, c := range checks {
+					rows = append(rows, []string{c.Check, c.Status, strings.ReplaceAll(c.Detail, "\n", "; ")})
+					failed = failed || c.Status == "error"
+				}
+				if err := cell.Table(cmd.OutOrStdout(), rows); err != nil {
+					return err
+				}
+				if failed {
+					return fmt.Errorf("runner diagnostics found errors")
+				}
+				return nil
 			}
 			probes, err := engine.Doctor(cmd.Context())
 			if err != nil {
@@ -239,14 +301,11 @@ func newBackendsCmd(opts *options) *cobra.Command {
 		Use:   "backends",
 		Short: "List the backend manifests this host resolves",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load(opts.configPath)
+			engine, err := opts.engine(false)
 			if err != nil {
 				return err
 			}
-			reg, err := registry.Load(registry.ProviderDir(cfg.ProviderDir))
-			if err != nil {
-				return err
-			}
+			reg := engine.Registry
 			table := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
 			fmt.Fprintln(table, "BACKEND\tSOURCE\tCOMMAND\tDESCRIPTION")
 			for _, entry := range reg.Entries() {

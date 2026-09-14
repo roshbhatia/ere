@@ -3,6 +3,17 @@
 Run [Amp runners](https://ampcode.com/docs/cli/runners) on Docker, Lima, Kubernetes Pods, or Kubernetes KubeVirt VMs.
 Ere owns compute and workspace lifecycle. Amp owns threads and model-provider authentication, including its ChatGPT subscription integration.
 
+See [interactive workflows and cloning](docs/workflows.md), [private-runner events](docs/events.md),
+and [provider connection recipes](examples/connections/README.md) for the expanded CLI.
+
+```sh
+ere init
+ere start dev
+ere run dev --mode high -- 'Review recent changes'
+ere continue
+ere shell dev
+```
+
 ## Providers
 
 | Provider | Compute | Supervision | Workspace retention |
@@ -200,14 +211,13 @@ Install the directory into `.amp/plugins/ere` at the operator project's Git root
 Edit its `settings.ts` to select the ere binary and configuration. Keep it outside worker images.
 
 ```sh
-mkdir -p .amp/plugins
-cp -R integrations/amp/ere .amp/plugins/ere
+ere plugin install .amp/plugins/ere
 amp plugins list
 amp skills list
 ```
 
 Use `runner_run` to allocate a profile, prepare its runtime, create a private native Amp thread, attach labels, and submit work.
-Select the built-in mode explicitly. The installed Amp API rejects runner-executor creation from plugin tools. The plugin uses Amp CLI execution with an allocation label instead.
+Select a built-in or installed custom mode explicitly. The installed Amp API rejects runner-executor creation from plugin tools. The plugin uses Amp CLI execution with an allocation label instead.
 It marks the allocation unknown before submission, then records the returned thread ID. An interrupted submission remains allocated for recovery.
 `runner_poll` recovers activity after a timeout. `runner_release` reads a fresh thread export and matches idle activity to the final assistant message before releasing the allocation.
 It retains compute and storage. Finishing a turn never destroys the runner.

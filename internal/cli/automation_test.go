@@ -55,7 +55,7 @@ func TestMCPStdioProtocol(t *testing.T) {
 	if responses[0].Error.Code != -32700 || responses[1].Error.Code != -32600 || responses[4].Error.Code != -32601 {
 		t.Fatalf("wrong protocol errors: %+v", responses)
 	}
-	if responses[2].Result.Protocol != "2025-06-18" || len(responses[3].Result.Tools) != 11 || responses[5].Error.Code != 0 {
+	if responses[2].Result.Protocol != "2025-06-18" || len(responses[3].Result.Tools) != 16 || responses[5].Error.Code != 0 {
 		t.Fatalf("roundtrip failed: %+v", responses)
 	}
 }

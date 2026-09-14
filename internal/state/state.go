@@ -15,6 +15,8 @@ import (
 )
 
 type Allocation struct {
+	Intent    string    `json:"intent,omitempty"`
+	Submitted bool      `json:"submitted,omitempty"`
 	ID        string    `json:"id"`
 	Runner    string    `json:"runner"`
 	RunnerID  string    `json:"runnerId"`

@@ -32,7 +32,7 @@
             src = ./.;
             # vendorHash is recomputed when the module graph changes; run
             # `nix build` and copy the hash it reports here on dependency bumps.
-            vendorHash = "sha256-pjhPGqSnizYfAmjJukyUVj2O13kybI6BjMH/J7G/900=";
+            vendorHash = "sha256-fwLTiQAePJsvQsNyvWQwFe1japGjqqCAOcoA1YbtNHc=";
             subPackages = [ "cmd/ere" ];
             ldflags = [
               "-s"

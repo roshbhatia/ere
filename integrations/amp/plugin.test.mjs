@@ -18,6 +18,7 @@ function harness({ timeout = false, remote = false } = {}) {
       calls.push([operation, input])
       let output = {}
       if (operation === 'runner_acquire') output = allocation
+      if (operation === 'runner_thread_create') { Object.assign(allocation, {threadId:'T-1234abcd',state:'unknown'}); output=allocation }
       if (operation === 'runner_activity') Object.assign(allocation, input)
       if (operation === 'runner_allocations') output = { allocations: [allocation] }
       return { exitCode: 0, stdout: JSON.stringify(output), stderr: '' }
@@ -29,16 +30,18 @@ function harness({ timeout = false, remote = false } = {}) {
   return { amp, tools, calls, registeredSkills }
 }
 
-test('remote submission persists unknown allocation first and preserves mode', async () => {
+test('remote submission uses the durable CLI flow and preserves custom mode', async () => {
   const h = harness(); await plugin(h.amp)
-  const result = JSON.parse(await h.tools.get('runner_run').execute({ runner: 'test', prompt: 'do work', mode: 'medium' }))
+  const result = JSON.parse(await h.tools.get('runner_run').execute({ runner: 'test', prompt: 'do work', mode: 'custom-mode', title:'Task', features:['skill'], labels:['review'] }))
   assert.equal(result.threadId, 'T-1234abcd')
-  const submitted = h.calls.find(call => Array.isArray(call) && call[0] === 'submit-thread')
-  assert.deepEqual(submitted[1], { mode: 'medium', executor: 'runner:amp-test', label: 'ere-allocation-allocation-1', prompt: 'do work' })
-  const unknown = h.calls.findIndex(call => Array.isArray(call) && call[0] === 'runner_activity' && call[1].state === 'unknown')
-  assert.ok(unknown < h.calls.indexOf(submitted))
+  const submitted=h.calls.find(call=>call[0]==='runner_thread_create')[1]
+  assert.equal(submitted.mode,'custom-mode')
+  assert.equal(submitted.title,'Task')
+  assert.deepEqual(submitted.features,['skill'])
+  assert.deepEqual(submitted.labels,['review'])
+  assert.ok(submitted.id)
   assert.equal(h.registeredSkills[0].path, 'skills/runner-workflow')
-  assert.equal(h.calls.filter(call => Array.isArray(call) && call[0] === 'runner_release').length, 0)
+  assert.equal(h.calls.filter(call => call[0] === 'runner_release').length, 0)
 })
 
 test('timeout retains unknown activity', async () => {

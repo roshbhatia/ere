@@ -128,9 +128,11 @@ func (e *Engine) Up(ctx context.Context, names []string, restart bool) error {
 		return err
 	}
 	for _, runner := range runners {
+		started := time.Now()
 		if err := e.up(ctx, runner, restart); err != nil {
-			return err
+			return fmt.Errorf("runner %s failed after %s: %w", runner.Name, time.Since(started).Round(time.Second), err)
 		}
+		e.report("%s: ready after %s", runner.Name, time.Since(started).Round(time.Second))
 	}
 	return nil
 }
@@ -361,6 +363,11 @@ func (e *Engine) Remove(ctx context.Context, names []string) error {
 			return err
 		}
 		e.report("%s: destroying sandbox", runner.Name)
+		probe, err := client.Probe(ctx)
+		if err != nil {
+			return err
+		}
+		e.report("%s: %s", runner.Name, probe.Retention)
 		_, err = client.Destroy(ctx, sandbox.Ref{Name: runner.Name})
 		return err
 	})

@@ -67,20 +67,12 @@ export default async function (amp: PluginAPI) {
     name: 'runner_run', title: 'Run task on runner',
     transcriptGroup: { active: 'Running runner task', complete: 'Ran runner task' },
     description: 'Allocate a configured runner and submit an independent private Amp thread through the supported CLI. A timeout retains the allocation. Use runner_poll to recover it.',
-    inputSchema: { type: 'object', properties: { runner: { type: 'string' }, prompt: { type: 'string' }, mode: { type: 'string', enum: ['low', 'medium', 'high', 'ultra'] } }, required: ['runner', 'prompt', 'mode'], additionalProperties: false },
+    inputSchema: { type: 'object', properties: { runner: { type: 'string' }, prompt: { type: 'string' }, mode: { type: 'string' }, title: { type: 'string' }, labels: { type: 'array', items: { type: 'string' } }, features: { type: 'array', items: { type: 'string' } } }, required: ['runner', 'prompt', 'mode'], additionalProperties: false },
     async execute(input) {
       const runner = text(input, 'runner'), prompt = text(input, 'prompt'), mode = text(input, 'mode')
-      if (mode !== 'low' && mode !== 'medium' && mode !== 'high' && mode !== 'ultra') throw new Error('Unsupported mode')
-      const a = allocation(await call('runner_acquire', { runner, id: crypto.randomUUID() }))
-      await call('runner_ensure', { runner })
-      await call('runner_activity', { runner, id: a.id, state: 'unknown' })
-      const label = 'ere-allocation-' + a.id
-      const launched = await amp.$`amp --executor ${'runner:' + a.runnerId} --mode ${mode} --visibility private --label ere --label ${'ere-' + a.provider} --label ${label} -x ${prompt}`
-      if (launched.exitCode !== 0) throw new Error(`Allocation ${a.id} retained as unknown: ${launched.stderr}`)
-      const match = launched.stdout.match(/T-[0-9a-f-]+/i)
-      if (!match) throw new Error(`Allocation ${a.id} retained; recover the thread using label ${label}`)
-      const threadID: `T-${string}` = `T-${match[0].slice(2)}`
-      await call('runner_activity', { runner, id: a.id, threadId: threadID, state: 'unknown' })
+      const a = allocation(await call('runner_thread_create', { ...input, runner, prompt, mode, id: crypto.randomUUID() }))
+      if (!a.threadId || !a.threadId.startsWith('T-')) throw new Error(`Allocation ${a.id} retained; recover its thread before retrying`)
+      const threadID: `T-${string}` = `T-${a.threadId.slice(2)}`
       try {
         const deadline = Date.now() + settings.waitTimeoutMs
         while (Date.now() < deadline) {
@@ -118,8 +110,47 @@ export default async function (amp: PluginAPI) {
     })
   }
 
-  amp.registerCommand('runner-profiles', { title: 'List runner profiles', category: 'ere', description: 'Show configured runner profiles.' }, async ctx => {
-    await ctx.ui.notify(JSON.stringify(await call('runner_profiles')))
+  async function profiles() {
+    const value = await call('runner_profiles')
+    if (!Array.isArray(value)) throw new Error('Invalid profile list')
+    return value.map(object)
+  }
+  for (const operation of ['status', 'logs', 'drain', 'resume']) {
+    amp.registerCommand(`runner-${operation}`, { title: `${operation} runner`, category: 'ere', description: `${operation} a configured runner.` }, async ctx => {
+      const items = await profiles()
+      const name = await ctx.ui.select({ title: 'Choose runner', options: items.map(item => text(item, 'name')) })
+      if (!name) return
+      await ctx.ui.notify(JSON.stringify(await call(`runner_${operation}`, { runner: name })))
+    })
+  }
+  amp.registerCommand('runner-profiles', { title: 'Choose runner', category: 'ere', description: 'Inspect a configured runner.' }, async ctx => {
+    const items = await profiles()
+    const name = await ctx.ui.select({ title: 'Choose runner', options: items.map(item => text(item, 'name')) })
+    if (name) await ctx.ui.notify(JSON.stringify(await call('runner_status', { runner: name })))
+  })
+  amp.registerCommand('runner-start', { title: 'Start runner thread', category: 'ere', description: 'Create a private native thread using the current agent mode.' }, async ctx => {
+    const items = await profiles()
+    const name = await ctx.ui.select({ title: 'Choose runner', options: items.map(item => text(item, 'name')) })
+    if (!name) return
+    const a = allocation(await call('runner_acquire', { runner: name, id: crypto.randomUUID() }))
+    await call('runner_ensure', { runner: name })
+    await call('runner_activity', { runner: name, id: a.id, state: 'unknown' })
+    const agent = ctx.thread ? await ctx.thread.agent() : amp.getBuiltinAgent('high')
+    const thread = await agent.createThread({ executor: { type: 'runner', id: a.runnerId }, visibility: 'private', show: true })
+    await call('runner_activity', { runner: name, id: a.id, threadId: thread.id, state: 'unknown' })
+    const labeled = await amp.$`amp threads label ${thread.id} ere ${'ere-' + a.provider} ${'ere-allocation-' + a.id}`
+    if (labeled.exitCode !== 0) throw new Error(`Thread ${thread.id} created; label failed: ${labeled.stderr}`)
+    await ctx.ui.notify(`Runner ${name}; thread ${thread.id}; allocation retained when you leave the TUI.`)
+  })
+  amp.registerCommand('runner-continue', { title: 'Continue runner thread', category: 'ere', description: 'Reserve a tracked thread and show its continuation link.' }, async ctx => {
+    const value = await call('runner_threads')
+    if (!Array.isArray(value)) throw new Error('Invalid thread list')
+    const threads = value.map(allocation).filter(item => item.threadId)
+    const id = await ctx.ui.select({ title: 'Continue thread', options: [...new Set(threads.map(item => item.threadId ?? ''))] })
+    if (!id) return
+    await call('runner_thread_continue', { threadId: id })
+    await ctx.system.open(new URL(`threads/${id}`, amp.system.ampURL))
+    await ctx.ui.notify(`Continue in the terminal with: ere continue ${id}`)
   })
   await amp.registerSkill({ path: 'skills/runner-workflow' })
 }

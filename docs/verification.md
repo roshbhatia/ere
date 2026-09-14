@@ -83,3 +83,30 @@ The public repositories did not establish a shared runner-label namespace. Ere's
 
 See the current [plugin documentation](https://ampcode.com/docs/customize/plugins), [skills](https://ampcode.com/docs/customize/skills),
 [MCP configuration](https://ampcode.com/docs/customize/mcp), and [subscription routing](https://ampcode.com/docs/the-dial).
+
+## CLI workflows, 2026-09-14
+
+Live checks used a macOS host and a Lima Linux runner:
+
+- `ere run --id ... --json` created a private remote thread and persisted its allocation.
+- A read-only remote command returned `/workspace` and `Linux`.
+- `ere threads poll` returned the final response; release required matching idle activity.
+- `ere continue` opened the native Amp TUI. A second prompt returned `ERE_TUI_OK` on the same thread.
+- Amp displayed its existing-executor notice. Pressing Enter continued into the remote thread.
+- A credential-free Lima template was built, stopped, cloned, and booted. The clone retained its marker and had a populated machine ID.
+- Test clones and their template were removed after verification. The normal runner remained available.
+- A queued event progressed through remote submission to completion and released its allocation.
+- The bundled plugin installer copied its skill and bound its settings to the resolved configuration.
+
+The remote submission path uses `amp --executor runner:<id> -x <prompt>`.
+Do not use `-ox` with a runner executor: the installed CLI rejects that combination.
+Empty-thread creation is insufficient for this workflow; `start` submits a short readiness request when no prompt is supplied.
+
+Automated coverage includes concurrent webhook deduplication, signature rejection, queue claim recovery,
+configuration routing, idempotent submission, unknown-submission retention, stale-idle rejection,
+resolved Lima clone configuration, foreign-machine rejection, picker navigation, and installation overwrite protection.
+
+Incus, Tart, Multipass, SSH, and Podman adapters or recipes have contract and configuration checks, not live native-runtime proof here.
+Native app and iOS interaction require validation in those clients. The CLI exposes Amp's existing thread URLs and terminal flag.
+The plugin passes installed Amp type checks. Its installed palette start callback created a remote runner thread, which returned `ERE_PALETTE_OK`.
+An interactive shell returned `SHELL_OK` from `/workspace`. All verification allocations were released.
