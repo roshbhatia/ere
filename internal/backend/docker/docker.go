@@ -172,7 +172,10 @@ func (b *Backend) Status(ctx context.Context, ref sandbox.Ref) (sandbox.Status, 
 		return status, err
 	}
 	if out.ExitCode != 0 {
-		return status, nil
+		if strings.Contains(strings.ToLower(out.Stderr), "no such object") || strings.Contains(strings.ToLower(out.Stderr), "no such container") {
+			return status, nil
+		}
+		return status, fmt.Errorf("docker inspect %s: %s", ref.Name, strings.TrimSpace(out.Stderr))
 	}
 	var records []inspected
 	if err := json.Unmarshal([]byte(out.Stdout), &records); err != nil || len(records) == 0 {

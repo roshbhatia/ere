@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
 	"strconv"
@@ -42,7 +43,7 @@ func New(binary, vmType, base string) *Backend {
 		vmType = DefaultVMType()
 	}
 	if base == "" {
-		base = "template://default"
+		base = "template://_images/ubuntu-lts"
 	}
 	return &Backend{Binary: binary, VMType: vmType, Base: base}
 }
@@ -102,7 +103,7 @@ func (b *Backend) template(spec sandbox.Spec) string {
 		mount = DefaultMountPoint
 	}
 	var builder strings.Builder
-	fmt.Fprintf(&builder, "base: %s\n", b.Base)
+	fmt.Fprintf(&builder, "base: %q\n", b.Base)
 	fmt.Fprintf(&builder, "vmType: %q\n", b.VMType)
 	if spec.CPUs > 0 {
 		fmt.Fprintf(&builder, "cpus: %d\n", spec.CPUs)
@@ -116,7 +117,9 @@ func (b *Backend) template(spec sandbox.Spec) string {
 	// containerd is lima's default payload and costs minutes of first boot that
 	// an agent sandbox never uses.
 	builder.WriteString("containerd:\n  system: false\n  user: false\n")
-	if spec.Workspace != "" {
+	if spec.Workspace == "" {
+		builder.WriteString("mounts: []\n")
+	} else {
 		builder.WriteString("mounts:\n")
 		fmt.Fprintf(&builder, "  - location: %q\n", spec.Workspace)
 		fmt.Fprintf(&builder, "    mountPoint: %q\n", mount)
@@ -222,8 +225,10 @@ func (b *Backend) instances(ctx context.Context) ([]listed, error) {
 	decoder := json.NewDecoder(strings.NewReader(out))
 	for {
 		var record listed
-		if err := decoder.Decode(&record); err != nil {
+		if err := decoder.Decode(&record); err == io.EOF {
 			break
+		} else if err != nil {
+			return nil, fmt.Errorf("decode lima list: %w", err)
 		}
 		records = append(records, record)
 	}
@@ -271,7 +276,7 @@ func (b *Backend) List(ctx context.Context) (sandbox.List, error) {
 	}
 	list := sandbox.List{Sandboxes: []sandbox.Status{}}
 	for _, record := range records {
-		if !strings.HasPrefix(record.Name, Prefix) {
+		if !strings.HasPrefix(record.Name, Prefix) || record.VMType != b.VMType {
 			continue
 		}
 		list.Sandboxes = append(list.Sandboxes, sandbox.Status{
