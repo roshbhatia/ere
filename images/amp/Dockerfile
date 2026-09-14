@@ -12,7 +12,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV AMP_HOME=/opt/amp
 ENV PATH=/opt/amp/bin:$PATH
 
-RUN AMP_VERSION="${AMP_VERSION}" bash -c 'curl -fsSL https://ampcode.com/install.sh | bash'
+RUN curl -fsSL https://ampcode.com/install.sh -o /tmp/install-amp.sh \
+ && AMP_VERSION="${AMP_VERSION}" bash /tmp/install-amp.sh \
+ && rm /tmp/install-amp.sh \
+ && amp --version
 
 WORKDIR /workspace
 CMD ["sleep", "infinity"]

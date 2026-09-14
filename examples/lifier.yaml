@@ -1,42 +1,43 @@
-# lifier configuration. Copy to $XDG_CONFIG_HOME/lifier/lifier.yaml.
 defaultBackend: docker
 
 amp:
-  binary: amp
-  # lifier never stores a credential. It resolves this reference at launch and
-  # passes the value to the sandbox over stdin.
-  apiKeySecret: "op://Personal/ampcode/credential"
-  remoteControlTerminal: false
+  apiKeySecret: env://AMP_API_KEY
 
 defaults:
   image: lifier/amp:latest
   mountPath: /workspace
-  cpus: 4
-  memoryMB: 8192
-  diskGB: 60
+  cpus: 2
+  memoryMB: 4096
+  diskGB: 30
 
 runners:
-  # A container on the local Docker daemon. Fast to create, shares the kernel.
-  - name: sysinit
+  - name: docker-example
     backend: docker
-    workspace: ~/src/sysinit
-    runnerId: workstation-sysinit
+    workspace: .
+    runnerId: lifier-docker
 
-  # A Linux VM on Apple's Virtualization.framework. Its own kernel, so an agent
-  # that installs system packages cannot reach the host.
-  - name: sysinit-vm
+  - name: lima-example
     backend: vz
-    workspace: ~/src/sysinit
-    runnerId: workstation-sysinit-vm
+    workspace: .
+    runnerId: lifier-lima
     provision:
-      - "command -v amp || curl -fsSL https://ampcode.com/install.sh | bash"
+      - |
+        if ! test -x /opt/amp/bin/amp; then
+          curl -fsSL https://ampcode.com/install.sh -o /tmp/install-amp.sh &&
+          sudo env AMP_HOME=/opt/amp bash /tmp/install-amp.sh
+        fi
     env:
-      PATH: "/home/$USER.linux/.amp/bin:/usr/local/bin:/usr/bin:/bin"
+      PATH: /opt/amp/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-  # The same VM shape on QEMU. On Linux this is KVM-accelerated.
-  - name: sysinit-qemu
-    backend: qemu
-    workspace: ~/src/sysinit
-    runnerId: workstation-sysinit-qemu
-    secrets:
-      OPENROUTER_API_KEY: "op://Personal/openrouter/api-key"
+  - name: k8s-example
+    backend: k8s
+    workspace: .
+    runnerId: lifier-k8s
+    provision:
+      - |
+        if ! test -x /opt/amp/bin/amp; then
+          curl -fsSL https://ampcode.com/install.sh -o /tmp/install-amp.sh &&
+          sudo env AMP_HOME=/opt/amp bash /tmp/install-amp.sh
+        fi
+    env:
+      PATH: /opt/amp/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
