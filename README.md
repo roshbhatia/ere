@@ -117,7 +117,7 @@ Stop a runner when you finish:
 lifier --config examples/lifier.yaml down lima-example
 ```
 
-Configuration defaults to `$XDG_CONFIG_HOME/lifier/lifier.yaml`.
+Configuration defaults to `$XDG_CONFIG_HOME/lifier/config.yaml`.
 Use `--config` to select another file.
 `lifier config schema` prints the JSON Schema; `lifier config show` prints effective values.
 Runner IDs must be valid hostnames.
