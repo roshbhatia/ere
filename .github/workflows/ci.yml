@@ -59,7 +59,7 @@ jobs:
         run: nix build
 
       - name: smoke the built binary
-        run: ./result/bin/lifier --version
+        run: ./result/bin/ere --version
 
       # The dev shell is the source of truth for tool versions, so the lint
       # steps below run the same gofumpt/staticcheck/shfmt a contributor gets.

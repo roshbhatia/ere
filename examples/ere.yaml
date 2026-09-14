@@ -10,26 +10,26 @@ providers:
   lima:
     vmType: auto
   kubernetes-pod:
-    context: lifier-local
-    namespace: lifier
-    kubeconfig: ~/.kube/lifier.yaml
+    context: ere-local
+    namespace: ere
+    kubeconfig: ~/.kube/ere.yaml
   kubernetes-kubevirt:
-    context: lifier-local
-    namespace: lifier
-    kubeconfig: ~/.kube/lifier.yaml
-    sshKey: ~/.ssh/lifier
-    sshUser: lifier
+    context: ere-local
+    namespace: ere
+    kubeconfig: ~/.kube/ere.yaml
+    sshKey: ~/.ssh/ere
+    sshUser: ere
 runners:
   - name: docker-example
     backend: docker
-    image: lifier/amp:latest
+    image: ere/amp:latest
     workspace: .
-    runnerId: lifier-docker-example
+    runnerId: ere-docker-example
   - name: lima-example
     backend: lima
     image: template://_images/ubuntu-lts
     workspace: .
-    runnerId: lifier-lima-example
+    runnerId: ere-lima-example
     provision: &install-amp
       - |
         set -eu
@@ -41,6 +41,7 @@ runners:
           AMP_HOME=/opt/amp bash /tmp/install-amp.sh
           rm /tmp/install-amp.sh
         fi
+        chmod 755 /opt/amp /opt/amp/bin /opt/amp/bin/amp
         if ! test /usr/local/bin/amp -ef /opt/amp/bin/amp; then
           ln -s /opt/amp/bin/amp /usr/local/bin/amp
         fi
@@ -49,7 +50,7 @@ runners:
   - name: pod-example
     backend: kubernetes-pod
     image: ghcr.io/your-org/amp:version
-    runnerId: lifier-pod-example
+    runnerId: ere-pod-example
     storage:
       kind: pvc
       sizeGB: 10
@@ -57,7 +58,7 @@ runners:
     backend: kubernetes-kubevirt
     architecture: arm64
     bootVolume: amp-boot
-    runnerId: lifier-kubevirt-example
+    runnerId: ere-kubevirt-example
     storage:
       kind: pvc
       sizeGB: 10

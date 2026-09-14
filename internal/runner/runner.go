@@ -11,17 +11,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/roshbhatia/ere/internal/amp"
+	"github.com/roshbhatia/ere/internal/config"
+	"github.com/roshbhatia/ere/internal/registry"
+	"github.com/roshbhatia/ere/internal/sandbox"
+	"github.com/roshbhatia/ere/internal/secret"
 	"github.com/roshbhatia/go-utils/paths"
 	"github.com/roshbhatia/go-utils/provider"
-	"github.com/roshbhatia/lifier/internal/amp"
-	"github.com/roshbhatia/lifier/internal/config"
-	"github.com/roshbhatia/lifier/internal/registry"
-	"github.com/roshbhatia/lifier/internal/sandbox"
-	"github.com/roshbhatia/lifier/internal/secret"
 )
 
 // LogPath is where a runner's output lands inside its sandbox.
-const LogPath = "/tmp/lifier.log"
+const LogPath = "/tmp/ere.log"
 
 // Engine drives the declared fleet.
 type Engine struct {
@@ -95,7 +95,7 @@ func (e *Engine) spec(runner config.Runner) (sandbox.Spec, error) {
 		CPUs:         runner.CPUs,
 		MemoryMB:     runner.MemoryMB,
 		DiskGB:       runner.DiskGB,
-		Labels:       map[string]string{"lifier.runner-id": runner.RunnerID},
+		Labels:       map[string]string{"ere.runner-id": runner.RunnerID},
 	}, nil
 }
 
@@ -258,7 +258,7 @@ func (e *Engine) up(ctx context.Context, runner config.Runner, restart bool) err
 	return e.confirmLaunch(ctx, client, runner)
 }
 
-// SettleDelay is how long a launched agent is given before lifier checks that
+// SettleDelay is how long a launched agent is given before ere checks that
 // it is still there.
 var SettleDelay = 3 * time.Second
 
@@ -387,7 +387,7 @@ func (e *Engine) each(
 	return nil
 }
 
-// Row is one line of `lifier ls`.
+// Row is one line of `ere ls`.
 type Row struct {
 	Runner   string        `json:"runner"`
 	RunnerID string        `json:"runnerId"`

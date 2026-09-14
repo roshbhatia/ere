@@ -4,7 +4,7 @@
 package amp
 
 import (
-	"github.com/roshbhatia/lifier/internal/config"
+	"github.com/roshbhatia/ere/internal/config"
 )
 
 // EnvAPIKey is the variable the Amp CLI reads its credential from.

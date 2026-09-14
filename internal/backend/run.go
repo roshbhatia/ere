@@ -1,4 +1,4 @@
-// Package backend holds helpers shared by the sandbox backends lifier ships.
+// Package backend holds helpers shared by the sandbox backends ere ships.
 package backend
 
 import (

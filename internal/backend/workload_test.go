@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/roshbhatia/lifier/internal/sandbox"
+	"github.com/roshbhatia/ere/internal/sandbox"
 )
 
 func TestExecEnvironmentsAreIsolatedAndLiteral(t *testing.T) {
@@ -15,7 +15,7 @@ func TestExecEnvironmentsAreIsolatedAndLiteral(t *testing.T) {
 		wg.Add(1)
 		go func(value string) {
 			defer wg.Done()
-			script, err := ExecScript(sandbox.ExecRequest{Argv: []string{"sh", "-c", "printf %s \"$LIFIER_VALUE\""}, Env: map[string]string{"LIFIER_VALUE": value}})
+			script, err := ExecScript(sandbox.ExecRequest{Argv: []string{"sh", "-c", "printf %s \"$ERE_VALUE\""}, Env: map[string]string{"ERE_VALUE": value}})
 			if err != nil {
 				t.Error(err)
 				return
@@ -27,7 +27,7 @@ func TestExecEnvironmentsAreIsolatedAndLiteral(t *testing.T) {
 		}(value)
 	}
 	wg.Wait()
-	script, err := ExecScript(sandbox.ExecRequest{Argv: []string{"sh", "-c", "printf %s \"${LIFIER_VALUE-unset}\""}})
+	script, err := ExecScript(sandbox.ExecRequest{Argv: []string{"sh", "-c", "printf %s \"${ERE_VALUE-unset}\""}})
 	if err != nil {
 		t.Fatal(err)
 	}

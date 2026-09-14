@@ -1,7 +1,7 @@
-# lifier
+# ere
 
 Run [Amp runners](https://ampcode.com/docs/cli/runners) on Docker, Lima, Kubernetes Pods, or Kubernetes KubeVirt VMs.
-Lifier owns compute and workspace lifecycle. Amp owns threads and model-provider authentication, including its ChatGPT subscription integration.
+Ere owns compute and workspace lifecycle. Amp owns threads and model-provider authentication, including its ChatGPT subscription integration.
 
 ## Providers
 
@@ -22,14 +22,14 @@ A Lima-hosted Kubernetes cluster is a development fixture. The Kubernetes provid
 nix develop
 task build
 export PATH="$PWD:$PATH"
-lifier backends
+ere backends
 ```
 
-Copy [examples/lifier.yaml](examples/lifier.yaml) to `~/.config/lifier/config.yaml`, or pass `--config` explicitly.
+Copy [examples/ere.yaml](examples/ere.yaml) to `~/.config/ere/config.yaml`, or pass `--config` explicitly.
 Run named profiles while configuring the examples; bare `up` selects every declared runner.
 The example image registry, kubeconfig, context, and SSH key are placeholders to replace.
 
-Configure your model provider through Amp itself. Lifier does not copy ChatGPT login files or implement a separate subscription adapter.
+Configure your model provider through Amp itself. Ere does not copy ChatGPT login files or implement a separate subscription adapter.
 An Amp API credential authenticates the runner connection; it is separate from model-provider billing.
 Reference it with `amp.apiKeySecret: env://AMP_API_KEY`, `op://...`, or a runner secret reference.
 Do not put credentials in provider command arguments, labels, or committed files.
@@ -44,10 +44,10 @@ Subscription billing follows Amp model routing. It does not cover every model or
 See [Amp model providers](https://ampcode.com/docs/the-dial) and [runners](https://ampcode.com/docs/cli/runners).
 
 ```sh
-lifier --config examples/lifier.yaml plan docker-example
-lifier --config examples/lifier.yaml up docker-example
-lifier --config examples/lifier.yaml ls --json
-amp --executor runner:lifier-docker-example --mode high -x 'Inspect this workspace'
+ere --config examples/ere.yaml plan docker-example
+ere --config examples/ere.yaml up docker-example
+ere --config examples/ere.yaml ls --json
+amp --executor runner:ere-docker-example --mode high -x 'Inspect this workspace'
 ```
 
 `up` validates credentials before creating compute. New managed runners use native supervision.
@@ -57,7 +57,7 @@ A running process does not prove remote registration; submit an Amp task to prov
 
 ```sh
 task image:build
-lifier --config examples/lifier.yaml up docker-example
+ere --config examples/ere.yaml up docker-example
 ```
 
 A Docker bind path belongs to the daemon host. For remote daemons, configure a daemon-host path or a named volume:
@@ -75,14 +75,14 @@ runners:
       source: remote-worker-workspace
 ```
 
-The named volume is retained. Lifier does not upload a local directory into a remote daemon automatically.
+The named volume is retained. Ere does not upload a local directory into a remote daemon automatically.
 Credentials are installed through stdin in a private container file; command execution uses an independent stdin environment for each invocation.
 
 ## Lima
 
 ```sh
-lifier --config examples/lifier.yaml up lima-example
-lifier --config examples/lifier.yaml exec lima-example -- uname -a
+ere --config examples/ere.yaml up lima-example
+ere --config examples/ere.yaml exec lima-example -- uname -a
 ```
 
 The canonical provider selects VZ on macOS and QEMU on Linux. Templates are configurable through `image`.
@@ -92,8 +92,8 @@ The default Linux guest must provide systemd and passwordless sudo for the Lima 
 
 The [Amp Lima template](examples/lima/amp.yaml) installs Amp, Git, and CA certificates.
 It exposes `amp` through `/usr/local/bin/amp` for guest shells and leaves host directories unmounted.
-Use its absolute host path as a Lima runner's `image`; Lifier supplies the workspace mount and manages the runner process.
-For example: `image: /absolute/path/to/lifier/examples/lima/amp.yaml`.
+Use its absolute host path as a Lima runner's `image`; Ere supplies the workspace mount and manages the runner process.
+For example: `image: /absolute/path/to/ere/examples/lima/amp.yaml`.
 The existing example profile also exposes Amp through `/usr/local/bin/amp` during provisioning.
 
 To create a standalone VM with the [Lima template commands](https://lima-vm.io/docs/templates/):
@@ -104,8 +104,8 @@ limactl shell amp-shell amp --version
 limactl shell amp-shell
 ```
 
-The standalone template installs the CLI. Configure authentication and start a runner separately, or use Lifier to manage both.
-A shell user has separate Amp credentials from Lifier's managed workload.
+The standalone template installs the CLI. Configure authentication and start a runner separately, or use Ere to manage both.
+A shell user has separate Amp credentials from Ere's managed workload.
 An existing managed runner already runs Amp; opening its shell does not require another `amp --no-tui` process.
 
 ## Kubernetes Pod
@@ -115,13 +115,13 @@ Push the [Docker image](images/amp/Dockerfile) to your registry and set the prof
 The provider supports PVC storage or explicitly ephemeral storage. It rejects local workspace paths.
 
 ```sh
-kubectl --context your-context create namespace lifier
-lifier --config examples/lifier.yaml plan pod-example
-lifier --config examples/lifier.yaml up pod-example
+kubectl --context your-context create namespace ere
+ere --config examples/ere.yaml plan pod-example
+ere --config examples/ere.yaml up pod-example
 ```
 
 An empty PVC source creates an owned workspace claim. `storage.source` names an existing external PVC.
-Runner removal retains both kinds of PVC. Lifier never deletes external claims.
+Runner removal retains both kinds of PVC. Ere never deletes external claims.
 The Pod does not mount a Kubernetes service-account token.
 A replacement Pod restores the declared workload and uses the same workspace claim.
 
@@ -133,13 +133,13 @@ For persistent boot storage, import a cloud image with CDI, for example [boot-vo
 Change its architecture-specific image URL when targeting AMD64.
 
 ```sh
-ssh-keygen -t ed25519 -f ~/.ssh/lifier
+ssh-keygen -t ed25519 -f ~/.ssh/ere
 kubectl --context your-context apply -f examples/kubernetes/boot-volume.yaml
-lifier --config examples/lifier.yaml up kubevirt-example
+ere --config examples/ere.yaml up kubevirt-example
 ```
 
 The cloud image must support cloud-init and systemd. Set `architecture` to match the guest image and eligible cluster nodes.
-Lifier configures the guest user, pins an SSH host key, mounts the workspace disk, and installs the supervised workload.
+Ere configures the guest user, pins an SSH host key, mounts the workspace disk, and installs the supervised workload.
 Guest execution uses SSH through `virtctl port-forward`; it does not execute commands in the launcher container.
 Existing boot images used with another cloud-init identity need preparation before reuse.
 
@@ -147,14 +147,14 @@ For local development on an Apple M3 or newer, [the Lima fixture](examples/lima/
 Its kubeconfig remains separate from the host's default context:
 
 ```sh
-limactl start --tty=false --name lifier-provider-test examples/lima/kubernetes.yaml
-kubectl --kubeconfig ~/.lima/lifier-provider-test/copied-from-guest/kubeconfig.yaml get nodes
+limactl start --tty=false --name ere-provider-test examples/lima/kubernetes.yaml
+kubectl --kubeconfig ~/.lima/ere-provider-test/copied-from-guest/kubeconfig.yaml get nodes
 ```
 
 Install pinned KubeVirt and CDI explicitly in that test cluster:
 
 ```sh
-task kubevirt:bootstrap -- ~/.lima/lifier-provider-test/copied-from-guest/kubeconfig.yaml default
+task kubevirt:bootstrap -- ~/.lima/ere-provider-test/copied-from-guest/kubeconfig.yaml default
 ```
 
 The repository Nix shell supplies `kubectl` and `virtctl`. The fixture uses host API port 16443.
@@ -165,11 +165,11 @@ See [the provider contract](docs/providers.md) for operations, ownership, storag
 ## Lifecycle and automation
 
 ```sh
-lifier plan worker
-lifier up worker
-lifier logs worker -n 100
-lifier down worker
-lifier rm worker
+ere plan worker
+ere up worker
+ere logs worker -n 100
+ere down worker
+ere rm worker
 ```
 
 `plan` identifies creates, starts, and replacements. Changed managed configurations require explicit compute replacement.
@@ -177,7 +177,7 @@ Check retention before removing a runner: container root filesystems and Lima gu
 `down` retains durable disks; explicitly ephemeral Pod storage is lost when the Pod is removed.
 Provisioning uses a digest in the root filesystem. It reruns after a fresh root filesystem or a changed provision declaration.
 
-`lifier reconcile worker` repeats reconciliation until interrupted. Run it under a host service manager when continuous reconciliation is needed.
+`ere reconcile worker` repeats reconciliation until interrupted. Run it under a host service manager when continuous reconciliation is needed.
 Native supervision continues when the CLI exits. The controller never expires or deletes workspaces automatically.
 
 Automation uses durable allocations, keyed by Amp runner identity. File locks serialize local controller mutations.
@@ -187,21 +187,21 @@ Direct assignments through Amp bypass managed allocations. An empty allocation l
 Only one controller state directory should manage a runner; this is not a distributed locking service.
 
 ```sh
-lifier api runner_profiles
-lifier api runner_acquire --input '{"runner":"worker","id":"request-123"}'
-lifier api runner_allocations --input '{"runner":"worker"}'
-lifier api runner_drain --input '{"runner":"worker"}'
+ere api runner_profiles
+ere api runner_acquire --input '{"runner":"worker","id":"request-123"}'
+ere api runner_allocations --input '{"runner":"worker"}'
+ere api runner_drain --input '{"runner":"worker"}'
 ```
 
 ## Amp plugin and MCP
 
-The [Amp plugin](integrations/amp/lifier) exposes tools, a palette command, and `lifier:runner-workflow`.
-Install the directory into `.amp/plugins/lifier` at the operator project's Git root, or the operator host's Amp system plugin directory.
-Edit its `settings.ts` to select the lifier binary and configuration. Keep it outside worker images.
+The [Amp plugin](integrations/amp/ere) exposes tools, a palette command, and `ere:runner-workflow`.
+Install the directory into `.amp/plugins/ere` at the operator project's Git root, or the operator host's Amp system plugin directory.
+Edit its `settings.ts` to select the ere binary and configuration. Keep it outside worker images.
 
 ```sh
 mkdir -p .amp/plugins
-cp -R integrations/amp/lifier .amp/plugins/lifier
+cp -R integrations/amp/ere .amp/plugins/ere
 amp plugins list
 amp skills list
 ```
@@ -211,14 +211,14 @@ Select the built-in mode explicitly. The installed Amp API rejects runner-execut
 It marks the allocation unknown before submission, then records the returned thread ID. An interrupted submission remains allocated for recovery.
 `runner_poll` recovers activity after a timeout. `runner_release` reads a fresh thread export and matches idle activity to the final assistant message before releasing the allocation.
 It retains compute and storage. Finishing a turn never destroys the runner.
-Thread labels are `lifier`, `lifier-<provider>`, and `lifier-allocation-<id>`; these are project conventions, not reserved Amp labels.
+Thread labels are `ere`, `ere-<provider>`, and `ere-allocation-<id>`; these are project conventions, not reserved Amp labels.
 
-For another client, `lifier mcp` serves the same engine over stdio. Use [examples/mcp.json](examples/mcp.json) for Amp's MCP configuration shape.
+For another client, `ere mcp` serves the same engine over stdio. Use [examples/mcp.json](examples/mcp.json) for Amp's MCP configuration shape.
 The MCP server has no separate scheduler or lifecycle implementation. It accepts configured runner names, not arbitrary shell commands.
 
-Kubernetes resources carry `app.kubernetes.io/*` labels plus lifier ownership metadata.
+Kubernetes resources carry `app.kubernetes.io/*` labels plus ere ownership metadata.
 Stored native UIDs and owner-reference checks establish ownership; display labels alone do not.
-Controller state and guest credentials live in private files under `$XDG_STATE_HOME/lifier`, defaulting to `~/.local/state/lifier`.
+Controller state and guest credentials live in private files under `$XDG_STATE_HOME/ere`, defaulting to `~/.local/state/ere`.
 Preserve this state while resources exist. Losing it requires explicit resource recovery, not automatic adoption by name.
 
 ## Verification

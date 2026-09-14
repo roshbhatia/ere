@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/roshbhatia/lifier/internal/backend"
-	"github.com/roshbhatia/lifier/internal/sandbox"
+	"github.com/roshbhatia/ere/internal/backend"
+	"github.com/roshbhatia/ere/internal/sandbox"
 )
 
 func NewManaged(binary, vmType, base string) *Backend {
@@ -63,9 +63,9 @@ func (b *Backend) installWorkload(ctx context.Context, name string) error {
 		return nil
 	}
 	work := *spec.Workload
-	unit := "[Unit]\nAfter=network-online.target\nWants=network-online.target\n[Service]\nUser=root\nType=simple\nExecStart=/bin/sh /var/lib/lifier/start\nRestart=always\nRestartSec=3\nKillMode=control-group\n[Install]\nWantedBy=multi-user.target\n"
-	start := "set -a\n. /var/lib/lifier/env\nset +a\n" + backend.WorkloadScript(work)
-	script := "set -eu\numask 077\nmkdir -p /var/lib/lifier\nprintf %s " + backend.Quote(backend.EnvFile(work.Env)) + " > /var/lib/lifier/env\nprintf %s " + backend.Quote(start) + " > /var/lib/lifier/start\nprintf %s " + backend.Quote(unit) + " > /etc/systemd/system/lifier-workload.service\nsystemctl daemon-reload\nsystemctl enable --now lifier-workload\n"
+	unit := "[Unit]\nAfter=network-online.target\nWants=network-online.target\n[Service]\nUser=root\nType=simple\nExecStart=/bin/sh /var/lib/ere/start\nRestart=always\nRestartSec=3\nKillMode=control-group\n[Install]\nWantedBy=multi-user.target\n"
+	start := "set -a\n. /var/lib/ere/env\nset +a\n" + backend.WorkloadScript(work)
+	script := "set -eu\numask 077\nmkdir -p /var/lib/ere\nprintf %s " + backend.Quote(backend.EnvFile(work.Env)) + " > /var/lib/ere/env\nprintf %s " + backend.Quote(start) + " > /var/lib/ere/start\nprintf %s " + backend.Quote(unit) + " > /etc/systemd/system/ere-workload.service\nsystemctl daemon-reload\nsystemctl enable --now ere-workload\n"
 	out, err := backend.RunStdin(ctx, script, b.Binary, "shell", "--tty=false", "--workdir", "/", instance(name), "--", "sudo", "sh", "-s")
 	if err != nil {
 		return err

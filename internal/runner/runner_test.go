@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/roshbhatia/lifier/internal/config"
-	"github.com/roshbhatia/lifier/internal/registry"
-	"github.com/roshbhatia/lifier/internal/runner"
-	"github.com/roshbhatia/lifier/internal/sandbox"
-	"github.com/roshbhatia/lifier/internal/secret"
+	"github.com/roshbhatia/ere/internal/config"
+	"github.com/roshbhatia/ere/internal/registry"
+	"github.com/roshbhatia/ere/internal/runner"
+	"github.com/roshbhatia/ere/internal/sandbox"
+	"github.com/roshbhatia/ere/internal/secret"
 )
 
 // recording is a backend that keeps its state on disk, because every operation
@@ -91,7 +91,7 @@ func (r *recording) Exec(_ context.Context, req sandbox.ExecRequest) (sandbox.Ex
 	if strings.Contains(joined, "ps -A") {
 		return sandbox.ExecResult{Stdout: state.Launched}, nil
 	}
-	if req.Detach && os.Getenv("LIFIER_TEST_EXIT_ON_LAUNCH") == "" {
+	if req.Detach && os.Getenv("ERE_TEST_EXIT_ON_LAUNCH") == "" {
 		state.Launched = joined
 		r.save(state)
 	}
@@ -144,12 +144,12 @@ func (r *recording) Destroy(_ context.Context, ref sandbox.Ref) (sandbox.Status,
 // invokes, so Up is exercised across the same process boundary a real backend
 // sits behind.
 func TestHelperBackend(t *testing.T) {
-	if os.Getenv("LIFIER_TEST_STATE") == "" {
+	if os.Getenv("ERE_TEST_STATE") == "" {
 		t.Skip("helper process")
 	}
 	backend := &recording{
-		statePath: os.Getenv("LIFIER_TEST_STATE"),
-		execPath:  os.Getenv("LIFIER_TEST_EXEC"),
+		statePath: os.Getenv("ERE_TEST_STATE"),
+		execPath:  os.Getenv("ERE_TEST_EXEC"),
 	}
 	if err := sandbox.Serve(context.Background(), backend, os.Stdin, os.Stdout); err != nil {
 		t.Fatal(err)
@@ -182,8 +182,8 @@ actions:
   sandbox:
     description: test backend
     env:
-      LIFIER_TEST_STATE: %q
-      LIFIER_TEST_EXEC: %q
+      ERE_TEST_STATE: %q
+      ERE_TEST_EXEC: %q
 `, os.Args[0], statePath, execPath)
 	if err := os.WriteFile(filepath.Join(providerDir, "recording.yaml"), []byte(manifest), 0o600); err != nil {
 		t.Fatal(err)
@@ -243,7 +243,7 @@ func TestUpReportsAnAgentThatExitsImmediately(t *testing.T) {
 	entry.Name = "exits"
 	entry.RunnerID = "exits"
 	h := newHarness(t, entry, config.Amp{Binary: "amp", APIKeySecret: "test-key"})
-	t.Setenv("LIFIER_TEST_EXIT_ON_LAUNCH", "1")
+	t.Setenv("ERE_TEST_EXIT_ON_LAUNCH", "1")
 
 	err := h.engine.Up(context.Background(), nil, false)
 	if err == nil {
@@ -287,10 +287,10 @@ func TestUpRestartRelaunchesTheAgent(t *testing.T) {
 }
 
 func TestUpResolvesSecretsIntoTheLaunchEnvironment(t *testing.T) {
-	t.Setenv("LIFIER_TEST_KEY", "resolved-key")
+	t.Setenv("ERE_TEST_KEY", "resolved-key")
 	entry := baseRunner()
-	entry.Secrets = map[string]string{"OPENROUTER_API_KEY": "env://LIFIER_TEST_KEY"}
-	h := newHarness(t, entry, config.Amp{Binary: "amp", APIKeySecret: "env://LIFIER_TEST_KEY"})
+	entry.Secrets = map[string]string{"OPENROUTER_API_KEY": "env://ERE_TEST_KEY"}
+	h := newHarness(t, entry, config.Amp{Binary: "amp", APIKeySecret: "env://ERE_TEST_KEY"})
 
 	if err := h.engine.Up(context.Background(), nil, false); err != nil {
 		t.Fatal(err)

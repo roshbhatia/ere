@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/roshbhatia/lifier/internal/runner"
+	"github.com/roshbhatia/ere/internal/runner"
 	"github.com/spf13/cobra"
 )
 
@@ -157,7 +157,7 @@ func automationTools() []rpcTool {
 		if op == "runner_activity" {
 			required = append(required, "state")
 		}
-		tools = append(tools, rpcTool{Name: op, Description: "Lifier " + op + " for configured runner profiles. Release retains compute and storage.", InputSchema: map[string]interface{}{"type": "object", "properties": map[string]interface{}{"runner": map[string]string{"type": "string"}, "id": map[string]string{"type": "string"}, "threadId": map[string]string{"type": "string"}, "state": map[string]string{"type": "string"}, "lines": map[string]string{"type": "integer"}}, "required": required, "additionalProperties": false}, Annotations: map[string]bool{"readOnlyHint": readOnly, "destructiveHint": false, "openWorldHint": true}})
+		tools = append(tools, rpcTool{Name: op, Description: "Ere " + op + " for configured runner profiles. Release retains compute and storage.", InputSchema: map[string]interface{}{"type": "object", "properties": map[string]interface{}{"runner": map[string]string{"type": "string"}, "id": map[string]string{"type": "string"}, "threadId": map[string]string{"type": "string"}, "state": map[string]string{"type": "string"}, "lines": map[string]string{"type": "integer"}}, "required": required, "additionalProperties": false}, Annotations: map[string]bool{"readOnlyHint": readOnly, "destructiveHint": false, "openWorldHint": true}})
 	}
 	return tools
 }
@@ -208,7 +208,7 @@ var errMethodNotFound = errors.New("method not found")
 func rpcCall(ctx context.Context, opts *options, req rpcRequest) (interface{}, error) {
 	switch req.Method {
 	case "initialize":
-		return map[string]interface{}{"protocolVersion": "2025-06-18", "capabilities": map[string]interface{}{"tools": map[string]interface{}{}}, "serverInfo": map[string]string{"name": "lifier", "version": "0.1.0"}}, nil
+		return map[string]interface{}{"protocolVersion": "2025-06-18", "capabilities": map[string]interface{}{"tools": map[string]interface{}{}}, "serverInfo": map[string]string{"name": "ere", "version": "0.1.0"}}, nil
 	case "ping":
 		return map[string]interface{}{}, nil
 	case "tools/list":

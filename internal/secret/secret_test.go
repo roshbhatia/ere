@@ -19,8 +19,8 @@ func TestLiteralValuePassesThrough(t *testing.T) {
 }
 
 func TestEnvReferenceReadsTheEnvironment(t *testing.T) {
-	t.Setenv("LIFIER_TEST_SECRET", "from-env")
-	value, err := New("op").Resolve(context.Background(), "env://LIFIER_TEST_SECRET")
+	t.Setenv("ERE_TEST_SECRET", "from-env")
+	value, err := New("op").Resolve(context.Background(), "env://ERE_TEST_SECRET")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +30,7 @@ func TestEnvReferenceReadsTheEnvironment(t *testing.T) {
 }
 
 func TestMissingEnvReferenceFails(t *testing.T) {
-	if _, err := New("op").Resolve(context.Background(), "env://LIFIER_TEST_ABSENT"); err == nil {
+	if _, err := New("op").Resolve(context.Background(), "env://ERE_TEST_ABSENT"); err == nil {
 		t.Fatal("expected an unset variable to fail rather than resolve empty")
 	}
 }
@@ -50,10 +50,10 @@ func TestFileReferenceStripsTheTrailingNewline(t *testing.T) {
 }
 
 func TestResolveAllKeepsKeysAndNamesAFailingOne(t *testing.T) {
-	t.Setenv("LIFIER_TEST_SECRET", "ok")
+	t.Setenv("ERE_TEST_SECRET", "ok")
 	resolver := New("op")
 	resolved, err := resolver.ResolveAll(context.Background(), map[string]string{
-		"A": "env://LIFIER_TEST_SECRET",
+		"A": "env://ERE_TEST_SECRET",
 		"B": "literal",
 	})
 	if err != nil {
@@ -62,7 +62,7 @@ func TestResolveAllKeepsKeysAndNamesAFailingOne(t *testing.T) {
 	if resolved["A"] != "ok" || resolved["B"] != "literal" {
 		t.Fatalf("resolved = %v", resolved)
 	}
-	_, err = resolver.ResolveAll(context.Background(), map[string]string{"C": "env://LIFIER_TEST_ABSENT"})
+	_, err = resolver.ResolveAll(context.Background(), map[string]string{"C": "env://ERE_TEST_ABSENT"})
 	if err == nil {
 		t.Fatal("expected a failure")
 	}

@@ -1,10 +1,10 @@
 version: "3"
 
 vars:
-  BIN: lifier
+  BIN: ere
   BIN_DIR: "{{.HOME}}/.local/bin"
   COVER_OUT: coverage.out
-  IMAGE: lifier/amp:latest
+  IMAGE: ere/amp:latest
 
 tasks:
   default:
@@ -14,8 +14,8 @@ tasks:
   # ── Build ──────────────────────────────────────────────────────────────────
 
   build:
-    desc: Build the lifier binary to ./lifier
-    cmd: go build -ldflags="-s -w" -o {{.BIN}} ./cmd/lifier
+    desc: Build the ere binary to ./ere
+    cmd: go build -ldflags="-s -w" -o {{.BIN}} ./cmd/ere
     sources:
       - "**/*.go"
       - go.mod
@@ -24,11 +24,11 @@ tasks:
       - "{{.BIN}}"
 
   install:
-    desc: Install lifier to $BIN_DIR (~/.local/bin by default)
+    desc: Install ere to $BIN_DIR (~/.local/bin by default)
     cmd: |
       mkdir -p {{.BIN_DIR}}
-      GOBIN={{.BIN_DIR}} go install ./cmd/lifier
-      echo "installed to {{.BIN_DIR}}/lifier"
+      GOBIN={{.BIN_DIR}} go install ./cmd/ere
+      echo "installed to {{.BIN_DIR}}/ere"
 
   clean:
     desc: Remove build artifacts and coverage output

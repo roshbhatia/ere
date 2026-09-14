@@ -1,6 +1,6 @@
 ---
 name: runner-workflow
-description: Run an Amp task on a configured lifier runner, recover a retained allocation, or inspect runner lifecycle and logs.
+description: Run an Amp task on a configured ere runner, recover a retained allocation, or inspect runner lifecycle and logs.
 metadata:
   version: '1'
 builtin-tools:

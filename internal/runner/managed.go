@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/roshbhatia/lifier/internal/amp"
-	"github.com/roshbhatia/lifier/internal/config"
-	"github.com/roshbhatia/lifier/internal/sandbox"
+	"github.com/roshbhatia/ere/internal/amp"
+	"github.com/roshbhatia/ere/internal/config"
+	"github.com/roshbhatia/ere/internal/sandbox"
 )
 
 func (e *Engine) managedSpec(r config.Runner, env map[string]string) (sandbox.Spec, error) {
@@ -54,7 +54,7 @@ func (e *Engine) upManaged(ctx context.Context, client *sandbox.Client, r config
 		}
 		select {
 		case <-wait.Done():
-			return fmt.Errorf("runner %s did not reach runtime readiness: %w; last probe error: %v; inspect lifier logs", r.Name, wait.Err(), err)
+			return fmt.Errorf("runner %s did not reach runtime readiness: %w; last probe error: %v; inspect ere logs", r.Name, wait.Err(), err)
 		case <-time.After(2 * time.Second):
 		}
 	}

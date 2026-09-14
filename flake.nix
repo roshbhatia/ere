@@ -1,5 +1,5 @@
 {
-  description = "lifier — Amp runners in composable sandboxes: Docker, Lima, Kubernetes Pods, and KubeVirt";
+  description = "ere — Amp runners in composable sandboxes: Docker, Lima, Kubernetes Pods, and KubeVirt";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -27,13 +27,13 @@
         in
         {
           packages.default = pkgs.buildGoModule {
-            pname = "lifier";
+            pname = "ere";
             version = "0.1.0";
             src = ./.;
             # vendorHash is recomputed when the module graph changes; run
             # `nix build` and copy the hash it reports here on dependency bumps.
             vendorHash = "sha256-pjhPGqSnizYfAmjJukyUVj2O13kybI6BjMH/J7G/900=";
-            subPackages = [ "cmd/lifier" ];
+            subPackages = [ "cmd/ere" ];
             ldflags = [
               "-s"
               "-w"
@@ -42,14 +42,14 @@
             ];
             meta = {
               description = "Run Amp runners in disposable container and virtual-machine sandboxes";
-              mainProgram = "lifier";
+              mainProgram = "ere";
             };
           };
 
           # `nix fmt` with no arguments would otherwise be handed every path in the
           # tree, including the Go and Markdown files nixfmt cannot parse.
           formatter = pkgs.writeShellApplication {
-            name = "lifier-nixfmt";
+            name = "ere-nixfmt";
             runtimeInputs = [
               pkgs.fd
               pkgs.nixfmt
@@ -64,7 +64,7 @@
           };
 
           checks.shell =
-            pkgs.runCommand "lifier-shellcheck"
+            pkgs.runCommand "ere-shellcheck"
               {
                 src = ./.;
                 nativeBuildInputs = [ pkgs.shellcheck ];

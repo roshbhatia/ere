@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/roshbhatia/lifier/internal/backend"
-	"github.com/roshbhatia/lifier/internal/sandbox"
+	"github.com/roshbhatia/ere/internal/backend"
+	"github.com/roshbhatia/ere/internal/sandbox"
 )
 
 func fake(t *testing.T, response string) *Backend {
@@ -25,7 +25,7 @@ func fake(t *testing.T, response string) *Backend {
 }
 
 func TestForeignStatefulSetIsNeverAdopted(t *testing.T) {
-	b := fake(t, `{"metadata":{"name":"lifier-worker","uid":"foreign","labels":{"lifier.owner":"someone-else"}}}`)
+	b := fake(t, `{"metadata":{"name":"ere-worker","uid":"foreign","labels":{"ere.owner":"someone-else"}}}`)
 	if _, err := b.Status(context.Background(), sandbox.Ref{Name: "worker"}); err == nil || !strings.Contains(err.Error(), "foreign") {
 		t.Fatalf("foreign ownership accepted: %v", err)
 	}
@@ -42,7 +42,7 @@ func TestPodManifestRetainsWorkspaceAndOmitsAccountToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, required := range []string{`"replicas":0`, `"automountServiceAccountToken":false`, `"whenDeleted":"Retain"`, `"secretRef"`, `"lifier.owner":"owner"`} {
+	for _, required := range []string{`"replicas":0`, `"automountServiceAccountToken":false`, `"whenDeleted":"Retain"`, `"secretRef"`, `"ere.owner":"owner"`} {
 		if !strings.Contains(string(data), required) {
 			t.Fatalf("missing %s", required)
 		}
@@ -75,7 +75,7 @@ func TestRejectsReplacedNativeUID(t *testing.T) {
 	if err := id.Save(); err != nil {
 		t.Fatal(err)
 	}
-	data, _ := json.Marshal(Object{"metadata": Object{"name": "lifier-worker", "uid": "new", "labels": Object{"lifier.owner": id.Owner}}})
+	data, _ := json.Marshal(Object{"metadata": Object{"name": "ere-worker", "uid": "new", "labels": Object{"ere.owner": id.Owner}}})
 	script := "#!/bin/sh\nprintf '%s' " + backend.Quote(string(data)) + "\n"
 	if err := os.WriteFile(b.Binary, []byte(script), 0o700); err != nil {
 		t.Fatal(err)

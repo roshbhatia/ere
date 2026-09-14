@@ -1,4 +1,4 @@
-// Package config is lifier's declarative surface: the runners a host should
+// Package config is ere's declarative surface: the runners a host should
 // hold, the backend each one uses, and where their secrets come from.
 package config
 
@@ -7,16 +7,16 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/roshbhatia/ere/internal/sandbox"
 	goconfig "github.com/roshbhatia/go-utils/config"
 	"github.com/roshbhatia/go-utils/paths"
-	"github.com/roshbhatia/lifier/internal/sandbox"
 )
 
 // Name is the config directory and file stem under XDG config home.
-const Name = "lifier"
+const Name = "ere"
 
 // EnvPrefix scopes environment overrides.
-const EnvPrefix = "LIFIER"
+const EnvPrefix = "ERE"
 
 // Config is one host's declared runner fleet.
 type Config struct {
@@ -28,7 +28,7 @@ type Config struct {
 	Runners        []Runner            `json:"runners,omitempty"        yaml:"runners,omitempty"`
 }
 
-// Amp describes how the agent is launched inside every sandbox. lifier never
+// Amp describes how the agent is launched inside every sandbox. ere never
 // holds an Amp credential itself: it names a secret reference and resolves it
 // at launch.
 type Amp struct {
@@ -96,7 +96,7 @@ func Path(path string) (string, error) {
 }
 
 // Schema returns the JSON Schema for the config file.
-func Schema() ([]byte, error) { return goconfig.Schema[Config]("lifier configuration") }
+func Schema() ([]byte, error) { return goconfig.Schema[Config]("ere configuration") }
 
 func (c *Config) applyDefaults() {
 	if c.Defaults.Backend == "" {

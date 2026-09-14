@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"text/tabwriter"
 
+	"github.com/roshbhatia/ere/internal/config"
+	"github.com/roshbhatia/ere/internal/registry"
+	"github.com/roshbhatia/ere/internal/sandbox"
 	"github.com/roshbhatia/go-utils/provider"
-	"github.com/roshbhatia/lifier/internal/config"
-	"github.com/roshbhatia/lifier/internal/registry"
-	"github.com/roshbhatia/lifier/internal/sandbox"
 	"github.com/spf13/cobra"
 )
 

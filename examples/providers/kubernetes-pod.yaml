@@ -2,7 +2,7 @@ version: provider/v1
 kind: sandbox
 name: team-pods
 description: Generic Kubernetes Pod runners in an explicit cluster scope
-command: [lifier, backend, kubernetes-pod, --context, team-dev, --namespace, runners]
+command: [ere, backend, kubernetes-pod, --context, team-dev, --namespace, runners]
 actions:
   sandbox:
     description: StatefulSet lifecycle with retained workspace PVCs

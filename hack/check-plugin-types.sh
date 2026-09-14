@@ -17,4 +17,4 @@ if end <= start:
 PY
 tsc --noEmit --strict --allowImportingTsExtensions --moduleResolution bundler \
   --module esnext --target es2022 --lib es2022,dom \
-  integrations/amp/runtime.d.ts "${plugin_types_dir}/plugin.d.ts" integrations/amp/lifier/index.ts
+  integrations/amp/runtime.d.ts "${plugin_types_dir}/plugin.d.ts" integrations/amp/ere/index.ts

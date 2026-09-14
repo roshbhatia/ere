@@ -1,5 +1,5 @@
 // Package secret resolves a configured reference into a value at launch time.
-// A resolved value is held in memory and handed to a sandbox over stdin; lifier
+// A resolved value is held in memory and handed to a sandbox over stdin; ere
 // never writes one to its own config or to a provider manifest.
 package secret
 
@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/roshbhatia/lifier/internal/backend"
+	"github.com/roshbhatia/ere/internal/backend"
 )
 
 // Scheme prefixes a reference understands.

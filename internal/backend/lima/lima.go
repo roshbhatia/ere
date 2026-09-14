@@ -1,5 +1,5 @@
 // Package lima implements the sandbox contract on top of limactl. One lima
-// driver covers every virtual-machine backend lifier targets: Virtualization
+// driver covers every virtual-machine backend ere targets: Virtualization
 // .framework on macOS, and QEMU with KVM acceleration on Linux.
 package lima
 
@@ -14,15 +14,15 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/roshbhatia/lifier/internal/backend"
-	"github.com/roshbhatia/lifier/internal/sandbox"
+	"github.com/roshbhatia/ere/internal/backend"
+	"github.com/roshbhatia/ere/internal/sandbox"
 )
 
 const (
-	// Prefix keeps lifier instances apart from hand-made lima instances.
-	Prefix = "lifier-"
+	// Prefix keeps ere instances apart from hand-made lima instances.
+	Prefix = "ere-"
 	// LogPath is where a detached exec writes inside the guest.
-	LogPath = "/tmp/lifier.log"
+	LogPath = "/tmp/ere.log"
 	// DefaultMountPoint is where the workspace appears in the guest.
 	DefaultMountPoint = "/workspace"
 )
@@ -171,7 +171,7 @@ func (b *Backend) Create(ctx context.Context, spec sandbox.Spec) (sandbox.Status
 		}
 		return existing, nil
 	}
-	file, err := os.CreateTemp("", "lifier-lima-*.yaml")
+	file, err := os.CreateTemp("", "ere-lima-*.yaml")
 	if err != nil {
 		return sandbox.Status{}, fmt.Errorf("write lima template: %w", err)
 	}
@@ -201,7 +201,7 @@ func (b *Backend) Create(ctx context.Context, spec sandbox.Spec) (sandbox.Status
 		found := false
 		for _, record := range records {
 			if record.Name == instance(spec.Name) {
-				if err := os.WriteFile(filepath.Join(record.Dir, "lifier-owner"), []byte(id.Owner), 0o600); err != nil {
+				if err := os.WriteFile(filepath.Join(record.Dir, "ere-owner"), []byte(id.Owner), 0o600); err != nil {
 					return sandbox.Status{}, err
 				}
 				found = true
@@ -305,7 +305,7 @@ func (b *Backend) Status(ctx context.Context, ref sandbox.Ref) (sandbox.Status, 
 			if err != nil {
 				return status, err
 			}
-			owner, err := os.ReadFile(filepath.Join(record.Dir, "lifier-owner"))
+			owner, err := os.ReadFile(filepath.Join(record.Dir, "ere-owner"))
 			if err != nil || string(owner) != id.Owner {
 				return status, fmt.Errorf("refusing foreign or replaced Lima instance")
 			}
@@ -376,7 +376,7 @@ func (b *Backend) Logs(ctx context.Context, req sandbox.LogRequest) (sandbox.Log
 		if lines <= 0 {
 			lines = 200
 		}
-		out, err := b.Exec(ctx, sandbox.ExecRequest{Name: req.Name, Argv: []string{"sudo", "journalctl", "-u", "lifier-workload", "-n", strconv.Itoa(lines), "--no-pager"}})
+		out, err := b.Exec(ctx, sandbox.ExecRequest{Name: req.Name, Argv: []string{"sudo", "journalctl", "-u", "ere-workload", "-n", strconv.Itoa(lines), "--no-pager"}})
 		if err != nil {
 			return sandbox.Logs{}, err
 		}

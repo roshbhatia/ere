@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/roshbhatia/lifier/internal/sandbox"
+	"github.com/roshbhatia/ere/internal/sandbox"
 )
 
 func TestStatusDistinguishesMissingContainerFromDaemonFailure(t *testing.T) {
@@ -15,8 +15,8 @@ func TestStatusDistinguishesMissingContainerFromDaemonFailure(t *testing.T) {
 		message string
 		absent  bool
 	}{
-		{"error: no such object: lifier-test", true},
-		{"Error: No such container: lifier-test", true},
+		{"error: no such object: ere-test", true},
+		{"Error: No such container: ere-test", true},
 		{"Cannot connect to the Docker daemon", false},
 	} {
 		t.Run(tc.message, func(t *testing.T) {

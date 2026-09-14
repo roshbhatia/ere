@@ -2,7 +2,7 @@ apiVersion: cdi.kubevirt.io/v1beta1
 kind: DataVolume
 metadata:
   name: amp-boot
-  namespace: lifier
+  namespace: ere
   annotations:
     cdi.kubevirt.io/storage.bind.immediate.requested: 'true'
 spec:

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/roshbhatia/lifier/internal/config"
-	"github.com/roshbhatia/lifier/internal/state"
+	"github.com/roshbhatia/ere/internal/config"
+	"github.com/roshbhatia/ere/internal/state"
 )
 
 type runnerLock struct {

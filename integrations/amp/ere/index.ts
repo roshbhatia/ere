@@ -28,7 +28,7 @@ export default async function (amp: PluginAPI) {
     const result = settings.config
       ? await amp.$`${settings.binary} --config ${settings.config} api ${operation} --input ${encoded}`
       : await amp.$`${settings.binary} api ${operation} --input ${encoded}`
-    if (result.exitCode !== 0) throw new Error(result.stderr.trim() || `lifier exited ${result.exitCode}`)
+    if (result.exitCode !== 0) throw new Error(result.stderr.trim() || `ere exited ${result.exitCode}`)
     const parsed: unknown = JSON.parse(result.stdout)
     return parsed
   }
@@ -45,7 +45,7 @@ export default async function (amp: PluginAPI) {
   ]
   for (const [name, title, active, complete] of tools) {
     amp.registerTool({ name, title, transcriptGroup: { active, complete },
-      description: `${title} for declared lifier profiles. Draining blocks new managed assignments and retains compute and storage.`,
+      description: `${title} for declared ere profiles. Draining blocks new managed assignments and retains compute and storage.`,
       inputSchema: { type: 'object', properties: { runner: { type: 'string' }, lines: { type: 'integer', minimum: 1, maximum: 10000 } }, required: name === 'runner_profiles' ? [] : ['runner'], additionalProperties: false },
       async execute(input) {
         if (name !== 'runner_profiles') text(input, 'runner')
@@ -74,8 +74,8 @@ export default async function (amp: PluginAPI) {
       const a = allocation(await call('runner_acquire', { runner, id: crypto.randomUUID() }))
       await call('runner_ensure', { runner })
       await call('runner_activity', { runner, id: a.id, state: 'unknown' })
-      const label = 'lifier-allocation-' + a.id
-      const launched = await amp.$`amp --executor ${'runner:' + a.runnerId} --mode ${mode} --visibility private --label lifier --label ${'lifier-' + a.provider} --label ${label} -x ${prompt}`
+      const label = 'ere-allocation-' + a.id
+      const launched = await amp.$`amp --executor ${'runner:' + a.runnerId} --mode ${mode} --visibility private --label ere --label ${'ere-' + a.provider} --label ${label} -x ${prompt}`
       if (launched.exitCode !== 0) throw new Error(`Allocation ${a.id} retained as unknown: ${launched.stderr}`)
       const match = launched.stdout.match(/T-[0-9a-f-]+/i)
       if (!match) throw new Error(`Allocation ${a.id} retained; recover the thread using label ${label}`)
@@ -118,7 +118,7 @@ export default async function (amp: PluginAPI) {
     })
   }
 
-  amp.registerCommand('runner-profiles', { title: 'List runner profiles', category: 'lifier', description: 'Show configured runner profiles.' }, async ctx => {
+  amp.registerCommand('runner-profiles', { title: 'List runner profiles', category: 'ere', description: 'Show configured runner profiles.' }, async ctx => {
     await ctx.ui.notify(JSON.stringify(await call('runner_profiles')))
   })
   await amp.registerSkill({ path: 'skills/runner-workflow' })

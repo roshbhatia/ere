@@ -1,5 +1,5 @@
 // Package registry resolves a backend name to a provider/v1 manifest. The
-// backends lifier ships are manifests too: their command is this binary's own
+// backends ere ships are manifests too: their command is this binary's own
 // `backend` subcommand, so nothing in the core calls a backend in process.
 package registry
 
@@ -10,9 +10,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/roshbhatia/ere/internal/sandbox"
 	"github.com/roshbhatia/go-utils/paths"
 	"github.com/roshbhatia/go-utils/provider"
-	"github.com/roshbhatia/lifier/internal/sandbox"
 )
 
 // Builtin names, one per shipped backend.
@@ -42,7 +42,7 @@ func ProviderDir(override string) string {
 	if override != "" {
 		return paths.ExpandHome(override)
 	}
-	return filepath.Join(paths.ConfigHome(), "lifier", "providers")
+	return filepath.Join(paths.ConfigHome(), "ere", "providers")
 }
 
 // Load builds the registry: the shipped backends first, then any manifest in
@@ -52,7 +52,7 @@ func Load(dir string) (*Registry, error) {
 	registry := &Registry{entries: map[string]Entry{}}
 	self, err := os.Executable()
 	if err != nil {
-		return nil, fmt.Errorf("locate lifier binary: %w", err)
+		return nil, fmt.Errorf("locate ere binary: %w", err)
 	}
 	for _, manifest := range Builtins(self) {
 		registry.add(Entry{Manifest: manifest, Source: "built-in"})

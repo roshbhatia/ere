@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/roshbhatia/lifier/internal/sandbox"
+	"github.com/roshbhatia/ere/internal/sandbox"
 )
 
 type Allocation struct {
@@ -44,7 +44,7 @@ func Open(ctx context.Context, key string) (*Store, error) {
 		}
 		root = filepath.Join(home, ".local", "state")
 	}
-	dir := filepath.Join(root, "lifier", "allocations")
+	dir := filepath.Join(root, "ere", "allocations")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}

@@ -7,13 +7,13 @@
 set -euo pipefail
 
 BACKEND="${1:-docker}"
-NAME="${LIFIER_SMOKE_NAME:-smoke-$$}"
+NAME="${ERE_SMOKE_NAME:-smoke-$$}"
 CREATED=false
-BIN="${LIFIER_BIN:-./lifier}"
-IMAGE="${LIFIER_SMOKE_IMAGE:-debian:bookworm-slim}"
+BIN="${ERE_BIN:-./ere}"
+IMAGE="${ERE_SMOKE_IMAGE:-debian:bookworm-slim}"
 # Docker Desktop shares the home directory, not macOS's private temp root, so a
 # mktemp workspace would mount empty.
-WORKDIR="$(mktemp -d "${HOME}/.lifier-smoke.XXXXXX")"
+WORKDIR="$(mktemp -d "${HOME}/.ere-smoke.XXXXXX")"
 
 cleanup() {
   if "$CREATED"; then

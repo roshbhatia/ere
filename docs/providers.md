@@ -1,6 +1,6 @@
 # Provider contract
 
-Lifier separates compute, workload, and allocation state.
+Ere separates compute, workload, and allocation state.
 A running container or VM does not prove that Amp registered remotely.
 A completed Amp turn does not release its allocation or remove its workspace.
 
@@ -34,7 +34,7 @@ Kubernetes requires a context and namespace. Mutations check owner tokens, nativ
 Pod and VMI execution also checks the child owner reference.
 
 Kubernetes resources use the standard `app.kubernetes.io/*` labels.
-The `lifier.owner`, `lifier.backend`, `lifier.sandbox`, and `lifier.runner-id` labels describe ownership and routing.
+The `ere.owner`, `ere.backend`, `ere.sandbox`, and `ere.runner-id` labels describe ownership and routing.
 Labels alone do not authorize adoption. Losing controller state requires explicit recovery.
 
 Only the controller needs Docker, Lima, or cluster administration access.
@@ -52,7 +52,7 @@ Its MAC address stays stable across VM instances so persistent guest network con
 | Kubernetes KubeVirt | PVC | Retains workspace PVC and external boot PVC |
 
 Use `diskGB` for Lima guest disks and `storage.sizeGB` for newly created PVCs.
-Existing PVC sources are external resources. Lifier neither resizes nor deletes them.
+Existing PVC sources are external resources. Ere neither resizes nor deletes them.
 A changed managed specification returns a replacement requirement. The engine does not silently replace running compute.
 Check the provider's retention policy before explicit replacement.
 

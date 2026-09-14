@@ -9,15 +9,15 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/roshbhatia/lifier/internal/backend"
-	"github.com/roshbhatia/lifier/internal/sandbox"
+	"github.com/roshbhatia/ere/internal/backend"
+	"github.com/roshbhatia/ere/internal/sandbox"
 )
 
 func (b *Backend) vm(ctx context.Context, spec sandbox.Spec, id backend.Identity, workspace Object) (Object, error) {
 	name := resource(spec.Name)
 	user := b.SSHUser
 	if user == "" {
-		user = "lifier"
+		user = "ere"
 	}
 	public, err := os.ReadFile(b.SSHKey + ".pub")
 	if err != nil {
@@ -51,9 +51,9 @@ func (b *Backend) vm(ctx context.Context, spec sandbox.Spec, id backend.Identity
 	if spec.Workload != nil {
 		work = *spec.Workload
 	}
-	unit := "[Unit]\nAfter=network-online.target\nWants=network-online.target\nRequiresMountsFor=" + mount + "\n[Service]\nUser=root\nType=simple\nExecStart=/bin/sh /var/lib/lifier/start\nRestart=always\nRestartSec=3\nKillMode=control-group\n[Install]\nWantedBy=multi-user.target\n"
-	script := "set -eu\nmountpoint -q " + backend.Quote(mount) + "\nset -a\n. /var/lib/lifier/env\nset +a\n" + backend.WorkloadScript(work)
-	cloud := Object{"users": []Object{{"name": user, "sudo": "ALL=(ALL) NOPASSWD:ALL", "shell": "/bin/bash", "ssh_authorized_keys": []string{strings.TrimSpace(string(public))}}}, "ssh_keys": Object{"ed25519_private": string(hostPrivate), "ed25519_public": string(hostPublic)}, "ssh_pwauth": false, "write_files": []Object{{"path": "/var/lib/lifier/start", "permissions": "0700", "content": script}, {"path": "/var/lib/lifier/env", "permissions": "0600", "content": backend.EnvFile(work.Env)}, {"path": "/etc/systemd/system/lifier-workload.service", "permissions": "0644", "content": unit}}, "fs_setup": []Object{{"label": "lifier-workspace", "filesystem": "ext4", "device": "/dev/disk/by-id/virtio-workspace", "overwrite": false}}, "mounts": [][]string{{"LABEL=lifier-workspace", mount, "ext4", "defaults", "0", "2"}}, "runcmd": [][]string{{"systemctl", "daemon-reload"}, {"systemctl", "enable", "lifier-workload"}, {"systemctl", "start", "--no-block", "lifier-workload"}}}
+	unit := "[Unit]\nAfter=network-online.target\nWants=network-online.target\nRequiresMountsFor=" + mount + "\n[Service]\nUser=root\nType=simple\nExecStart=/bin/sh /var/lib/ere/start\nRestart=always\nRestartSec=3\nKillMode=control-group\n[Install]\nWantedBy=multi-user.target\n"
+	script := "set -eu\nmountpoint -q " + backend.Quote(mount) + "\nset -a\n. /var/lib/ere/env\nset +a\n" + backend.WorkloadScript(work)
+	cloud := Object{"users": []Object{{"name": user, "sudo": "ALL=(ALL) NOPASSWD:ALL", "shell": "/bin/bash", "ssh_authorized_keys": []string{strings.TrimSpace(string(public))}}}, "ssh_keys": Object{"ed25519_private": string(hostPrivate), "ed25519_public": string(hostPublic)}, "ssh_pwauth": false, "write_files": []Object{{"path": "/var/lib/ere/start", "permissions": "0700", "content": script}, {"path": "/var/lib/ere/env", "permissions": "0600", "content": backend.EnvFile(work.Env)}, {"path": "/etc/systemd/system/ere-workload.service", "permissions": "0644", "content": unit}}, "fs_setup": []Object{{"label": "ere-workspace", "filesystem": "ext4", "device": "/dev/disk/by-id/virtio-workspace", "overwrite": false}}, "mounts": [][]string{{"LABEL=ere-workspace", mount, "ext4", "defaults", "0", "2"}}, "runcmd": [][]string{{"systemctl", "daemon-reload"}, {"systemctl", "enable", "ere-workload"}, {"systemctl", "start", "--no-block", "ere-workload"}}}
 	data, err := json.Marshal(cloud)
 	if err != nil {
 		return nil, err

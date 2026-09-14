@@ -1,4 +1,4 @@
-// Package sandbox defines the wire contract between lifier and a sandbox
+// Package sandbox defines the wire contract between ere and a sandbox
 // backend. A backend is an external executable that speaks provider/v1 frames,
 // so the types here are the payloads, not an in-process interface boundary.
 package sandbox

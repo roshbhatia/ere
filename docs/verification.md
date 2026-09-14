@@ -26,7 +26,7 @@ No subscription login files were copied into runners.
 | Kubernetes Pod | Remote Amp tasks completed; Pod replacement and stop/start retained the PVC; container runtime stop triggered a Kubernetes restart |
 | Kubernetes KubeVirt | Remote Amp task read both retained markers after stop/start and compute replacement; systemd recovered a killed Amp process |
 
-Docker used the repository's `lifier/amp:latest` image.
+Docker used the repository's `ere/amp:latest` image.
 The local Kubernetes fixture used Lima 2.2.0, Ubuntu 24.04, kernel 6.8.0-139-generic, K3s v1.36.4+k3s1, KubeVirt v1.8.4, and CDI v1.66.1.
 The KubeVirt guest used an ARM64 Ubuntu 24.04 cloud image imported into a boot PVC, plus a separate workspace PVC.
 
@@ -37,7 +37,7 @@ The provider now uses a stable MAC, avoids ordering the workload after cloud-fin
 
 ## Amp automation
 
-The installed Amp CLI loaded 11 plugin tools, a palette command, and the bundled `lifier:runner-workflow` skill.
+The installed Amp CLI loaded 11 plugin tools, a palette command, and the bundled `ere:runner-workflow` skill.
 A live operator task recovered an earlier allocation, ran a new remote Pod task, observed completion, and released both allocations.
 Compute and storage remained available after release.
 A further KubeVirt task read both retained markers through the plugin.
@@ -79,7 +79,7 @@ Research covered [official-plugins](https://github.com/ampcode/official-plugins/
 [amp-contrib](https://github.com/ampcode/amp-contrib/tree/2ba7041a9583a02987adf595aac58d1f9abfc183),
 and [amp.nvim](https://github.com/ampcode/amp.nvim/tree/01ede44322220da5dc0b73ad8ace328a5ec1f5bf).
 The plugin follows Amp's typed entrypoint, tool titles, transcript groups, palette commands, skill frontmatter, and directory layout.
-The public repositories did not establish a shared runner-label namespace. Lifier's thread labels are local project conventions.
+The public repositories did not establish a shared runner-label namespace. Ere's thread labels are local project conventions.
 
 See the current [plugin documentation](https://ampcode.com/docs/customize/plugins), [skills](https://ampcode.com/docs/customize/skills),
 [MCP configuration](https://ampcode.com/docs/customize/mcp), and [subscription routing](https://ampcode.com/docs/the-dial).

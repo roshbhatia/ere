@@ -8,7 +8,7 @@ import (
 
 func write(t *testing.T, body string) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "lifier.yaml")
+	path := filepath.Join(t.TempDir(), "ere.yaml")
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}

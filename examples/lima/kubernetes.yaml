@@ -28,19 +28,19 @@ provision:
       fi
       for attempt in $(seq 1 60); do
         if test -f /etc/rancher/k3s/k3s.yaml; then
-          sed 's/127.0.0.1:6443/127.0.0.1:16443/' /etc/rancher/k3s/k3s.yaml > /etc/rancher/k3s/lifier.yaml
-          chmod 644 /etc/rancher/k3s/lifier.yaml
+          sed 's/127.0.0.1:6443/127.0.0.1:16443/' /etc/rancher/k3s/k3s.yaml > /etc/rancher/k3s/ere.yaml
+          chmod 644 /etc/rancher/k3s/ere.yaml
           break
         fi
         sleep 2
       done
-      test -f /etc/rancher/k3s/lifier.yaml
+      test -f /etc/rancher/k3s/ere.yaml
 probes:
   - script: |
       #!/bin/sh
-      test -f /etc/rancher/k3s/lifier.yaml
+      test -f /etc/rancher/k3s/ere.yaml
     hint: Wait for K3s to write its kubeconfig.
 copyToHost:
-  - guest: /etc/rancher/k3s/lifier.yaml
+  - guest: /etc/rancher/k3s/ere.yaml
     host: '{{.Dir}}/copied-from-guest/kubeconfig.yaml'
     deleteOnStop: true

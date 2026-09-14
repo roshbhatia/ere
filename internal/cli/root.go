@@ -1,4 +1,4 @@
-// Package cli wires lifier's command tree. Commands parse input and print
+// Package cli wires ere's command tree. Commands parse input and print
 // results; the reconciliation lives in internal/runner.
 package cli
 
@@ -8,10 +8,10 @@ import (
 	"os"
 	"text/tabwriter"
 
-	"github.com/roshbhatia/lifier/internal/config"
-	"github.com/roshbhatia/lifier/internal/registry"
-	"github.com/roshbhatia/lifier/internal/runner"
-	"github.com/roshbhatia/lifier/internal/secret"
+	"github.com/roshbhatia/ere/internal/config"
+	"github.com/roshbhatia/ere/internal/registry"
+	"github.com/roshbhatia/ere/internal/runner"
+	"github.com/roshbhatia/ere/internal/secret"
 	"github.com/spf13/cobra"
 )
 
@@ -20,21 +20,21 @@ type options struct {
 	opBinary   string
 }
 
-// NewRootCmd builds the lifier command tree.
+// NewRootCmd builds the ere command tree.
 func NewRootCmd(version string) *cobra.Command {
 	opts := &options{}
 
 	root := &cobra.Command{
-		Use:   "lifier",
+		Use:   "ere",
 		Short: "Run Amp runners in disposable sandboxes",
-		Long: "lifier keeps a declared fleet of Amp runners alive in sandboxes.\n" +
+		Long: "ere keeps a declared fleet of Amp runners alive in sandboxes.\n" +
 			"Each sandbox backend is a provider/v1 executable, so a container, a\n" +
 			"virtual machine, and a machine across the network are the same shape.",
 		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.PersistentFlags().StringVar(&opts.configPath, "config", "", "path to the lifier config file")
+	root.PersistentFlags().StringVar(&opts.configPath, "config", "", "path to the ere config file")
 	root.PersistentFlags().StringVar(&opts.opBinary, "op", "op", "1Password CLI used to resolve op:// secrets")
 
 	root.AddCommand(
@@ -260,10 +260,10 @@ func newBackendsCmd(opts *options) *cobra.Command {
 }
 
 func newConfigCmd(opts *options) *cobra.Command {
-	cmd := &cobra.Command{Use: "config", Short: "Inspect the lifier configuration"}
+	cmd := &cobra.Command{Use: "config", Short: "Inspect the ere configuration"}
 	cmd.AddCommand(&cobra.Command{
 		Use:   "path",
-		Short: "Print the config file lifier would read",
+		Short: "Print the config file ere would read",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := config.Path(opts.configPath)
 			if err != nil {

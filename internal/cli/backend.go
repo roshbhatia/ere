@@ -4,15 +4,15 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/roshbhatia/lifier/internal/backend/docker"
-	"github.com/roshbhatia/lifier/internal/backend/kubernetes"
-	"github.com/roshbhatia/lifier/internal/backend/lima"
-	"github.com/roshbhatia/lifier/internal/registry"
-	"github.com/roshbhatia/lifier/internal/sandbox"
+	"github.com/roshbhatia/ere/internal/backend/docker"
+	"github.com/roshbhatia/ere/internal/backend/kubernetes"
+	"github.com/roshbhatia/ere/internal/backend/lima"
+	"github.com/roshbhatia/ere/internal/registry"
+	"github.com/roshbhatia/ere/internal/sandbox"
 	"github.com/spf13/cobra"
 )
 
-// newBackendCmd is the provider side of the contract. lifier's own backends are
+// newBackendCmd is the provider side of the contract. ere's own backends are
 // reached the same way an external one is: a process, one request frame in, one
 // result frame out.
 func newBackendCmd() *cobra.Command {
@@ -53,7 +53,7 @@ func newBackendCmd() *cobra.Command {
 	cmd.Flags().StringVar(&kube.Namespace, "namespace", "", "Kubernetes namespace")
 	cmd.Flags().StringVar(&kube.Kubeconfig, "kubeconfig", "", "Kubernetes config file")
 	cmd.Flags().StringVar(&kube.SSHKey, "ssh-key", "", "KubeVirt guest SSH identity")
-	cmd.Flags().StringVar(&kube.SSHUser, "ssh-user", "lifier", "KubeVirt guest user")
+	cmd.Flags().StringVar(&kube.SSHUser, "ssh-user", "ere", "KubeVirt guest user")
 	return cmd
 }
 

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/roshbhatia/ere/internal/sandbox"
 	"github.com/roshbhatia/go-utils/provider"
-	"github.com/roshbhatia/lifier/internal/sandbox"
 )
 
 // fake is the backend the helper process serves.
@@ -59,10 +59,10 @@ func (f *fake) Destroy(_ context.Context, ref sandbox.Ref) (sandbox.Status, erro
 // TestHelperBackend is not a test. It is the provider executable the round-trip
 // tests invoke, so the contract is exercised across a real process boundary.
 func TestHelperBackend(t *testing.T) {
-	if os.Getenv("LIFIER_TEST_BACKEND") == "" {
+	if os.Getenv("ERE_TEST_BACKEND") == "" {
 		t.Skip("helper process")
 	}
-	backend := &fake{failStart: os.Getenv("LIFIER_TEST_FAIL_START") != ""}
+	backend := &fake{failStart: os.Getenv("ERE_TEST_FAIL_START") != ""}
 	if err := sandbox.Serve(context.Background(), backend, os.Stdin, os.Stdout); err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func helperManifest(t *testing.T) provider.Manifest {
 		Actions: map[string]provider.Action{
 			sandbox.Capability: {
 				Description: "test backend",
-				Env:         map[string]string{"LIFIER_TEST_BACKEND": "1"},
+				Env:         map[string]string{"ERE_TEST_BACKEND": "1"},
 			},
 		},
 	}
@@ -125,7 +125,7 @@ func TestRoundTripPreservesArgvAcrossTheProcessBoundary(t *testing.T) {
 func TestBackendErrorBecomesAnErrorResult(t *testing.T) {
 	manifest := helperManifest(t)
 	action := manifest.Actions[sandbox.Capability]
-	action.Env["LIFIER_TEST_FAIL_START"] = "1"
+	action.Env["ERE_TEST_FAIL_START"] = "1"
 	manifest.Actions[sandbox.Capability] = action
 
 	client := sandbox.NewClient(manifest)

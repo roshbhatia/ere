@@ -1,5 +1,5 @@
 export const settings: { binary: string; config: string; role: 'operator' | 'worker'; waitTimeoutMs: number; pollIntervalMs: number } = {
-  binary: 'lifier',
+  binary: 'ere',
   config: '',
   role: 'operator',
   waitTimeoutMs: 300000,

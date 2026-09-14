@@ -6,11 +6,11 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/roshbhatia/lifier/internal/sandbox"
+	"github.com/roshbhatia/ere/internal/sandbox"
 )
 
 func TestBuiltinsDeclareTheSandboxAction(t *testing.T) {
-	for _, manifest := range Builtins("/usr/local/bin/lifier") {
+	for _, manifest := range Builtins("/usr/local/bin/ere") {
 		if err := manifest.Validate(); err != nil {
 			t.Fatalf("built-in %s is not a valid manifest: %v", manifest.Name, err)
 		}
@@ -20,7 +20,7 @@ func TestBuiltinsDeclareTheSandboxAction(t *testing.T) {
 		if manifest.Kind != sandbox.Kind {
 			t.Fatalf("built-in %s has kind %q", manifest.Name, manifest.Kind)
 		}
-		want := []string{"/usr/local/bin/lifier", "backend", manifest.Name}
+		want := []string{"/usr/local/bin/ere", "backend", manifest.Name}
 		if !slices.Equal(manifest.Command, want) {
 			t.Fatalf("built-in %s command = %v, want %v", manifest.Name, manifest.Command, want)
 		}

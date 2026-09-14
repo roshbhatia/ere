@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/roshbhatia/lifier/internal/sandbox"
+	"github.com/roshbhatia/ere/internal/sandbox"
 )
 
 type Identity struct {
@@ -27,7 +27,7 @@ func LoadIdentity(scope, name string) (Identity, error) {
 		}
 		root = filepath.Join(home, ".local", "state")
 	}
-	dir := filepath.Join(root, "lifier", "resources", sandbox.Digest(scope))
+	dir := filepath.Join(root, "ere", "resources", sandbox.Digest(scope))
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return Identity{}, err
 	}

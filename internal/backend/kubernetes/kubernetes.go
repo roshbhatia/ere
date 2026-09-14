@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/roshbhatia/lifier/internal/backend"
-	"github.com/roshbhatia/lifier/internal/sandbox"
+	"github.com/roshbhatia/ere/internal/backend"
+	"github.com/roshbhatia/ere/internal/sandbox"
 )
 
 type Object map[string]interface{}
@@ -36,7 +36,7 @@ func (b *Backend) kind() string {
 	}
 	return "statefulset"
 }
-func resource(name string) string { return "lifier-" + name }
+func resource(name string) string { return "ere-" + name }
 func (b *Backend) scope() string {
 	return b.Name() + "|" + b.Kubeconfig + "|" + b.Context + "|" + b.Namespace
 }
@@ -75,7 +75,7 @@ func (b *Backend) apply(ctx context.Context, obj Object) error {
 	if err != nil {
 		return err
 	}
-	_, err = b.run(ctx, string(data), "apply", "--server-side", "--field-manager=lifier", "-f", "-")
+	_, err = b.run(ctx, string(data), "apply", "--server-side", "--field-manager=ere", "-f", "-")
 	return err
 }
 
@@ -133,7 +133,7 @@ func (b *Backend) owned(ctx context.Context, name string) (*record, backend.Iden
 	if err != nil || r == nil {
 		return r, id, err
 	}
-	if r.Metadata.Labels["lifier.owner"] != id.Owner || (id.UID != "" && id.UID != r.Metadata.UID) {
+	if r.Metadata.Labels["ere.owner"] != id.Owner || (id.UID != "" && id.UID != r.Metadata.UID) {
 		return nil, id, fmt.Errorf("refusing foreign %s %s", b.kind(), resource(name))
 	}
 	if id.UID == "" {
@@ -228,7 +228,7 @@ func (b *Backend) validate(spec sandbox.Spec) error {
 }
 
 func (b *Backend) labels(spec sandbox.Spec, id backend.Identity) map[string]string {
-	labels := map[string]string{"app.kubernetes.io/name": "lifier", "app.kubernetes.io/instance": resource(spec.Name), "app.kubernetes.io/component": "runner", "app.kubernetes.io/part-of": "lifier", "app.kubernetes.io/managed-by": "lifier", "lifier.owner": id.Owner, "lifier.sandbox": spec.Name, "lifier.backend": b.Name()}
+	labels := map[string]string{"app.kubernetes.io/name": "ere", "app.kubernetes.io/instance": resource(spec.Name), "app.kubernetes.io/component": "runner", "app.kubernetes.io/part-of": "ere", "app.kubernetes.io/managed-by": "ere", "ere.owner": id.Owner, "ere.sandbox": spec.Name, "ere.backend": b.Name()}
 	for key, value := range spec.Labels {
 		if _, reserved := labels[key]; !reserved {
 			labels[key] = value
@@ -238,7 +238,7 @@ func (b *Backend) labels(spec sandbox.Spec, id backend.Identity) map[string]stri
 }
 
 func (b *Backend) meta(spec sandbox.Spec, id backend.Identity, name string) Object {
-	return Object{"name": name, "namespace": b.Namespace, "labels": b.labels(spec, id), "annotations": map[string]string{"lifier.digest": sandbox.Digest(spec)}}
+	return Object{"name": name, "namespace": b.Namespace, "labels": b.labels(spec, id), "annotations": map[string]string{"ere.digest": sandbox.Digest(spec)}}
 }
 
 func (b *Backend) ensurePVC(ctx context.Context, spec sandbox.Spec, id backend.Identity) (string, error) {
@@ -263,7 +263,7 @@ func (b *Backend) ensurePVC(ctx context.Context, spec sandbox.Spec, id backend.I
 		return "", err
 	}
 	if found != nil {
-		if found.Metadata.Labels["lifier.owner"] != id.Owner {
+		if found.Metadata.Labels["ere.owner"] != id.Owner {
 			return "", fmt.Errorf("refusing foreign PVC %s", name)
 		}
 		if found.Spec.Resources.Requests.Storage != strconv.Itoa(size)+"Gi" || (spec.Storage.Class != "" && found.Spec.StorageClassName != spec.Storage.Class) {
@@ -288,7 +288,7 @@ func (b *Backend) Create(ctx context.Context, spec sandbox.Spec) (sandbox.Status
 	}
 	digest := sandbox.Digest(spec)
 	if existing != nil {
-		if existing.Metadata.Annotations["lifier.digest"] != digest {
+		if existing.Metadata.Annotations["ere.digest"] != digest {
 			return sandbox.Status{}, fmt.Errorf("configuration changed: stop and remove compute before recreating; PVCs are retained")
 		}
 		if b.KubeVirt {
@@ -356,7 +356,7 @@ func (b *Backend) pod(ctx context.Context, spec sandbox.Spec, id backend.Identit
 	if spec.Architecture != "" {
 		podSpec["nodeSelector"] = Object{"kubernetes.io/arch": spec.Architecture}
 	}
-	return Object{"apiVersion": "apps/v1", "kind": "StatefulSet", "metadata": b.meta(spec, id, name), "spec": Object{"replicas": 0, "serviceName": name, "selector": Object{"matchLabels": Object{"lifier.owner": id.Owner}}, "persistentVolumeClaimRetentionPolicy": Object{"whenDeleted": "Retain", "whenScaled": "Retain"}, "template": Object{"metadata": Object{"labels": b.labels(spec, id)}, "spec": podSpec}}}, nil
+	return Object{"apiVersion": "apps/v1", "kind": "StatefulSet", "metadata": b.meta(spec, id, name), "spec": Object{"replicas": 0, "serviceName": name, "selector": Object{"matchLabels": Object{"ere.owner": id.Owner}}, "persistentVolumeClaimRetentionPolicy": Object{"whenDeleted": "Retain", "whenScaled": "Retain"}, "template": Object{"metadata": Object{"labels": b.labels(spec, id)}, "spec": podSpec}}}, nil
 }
 
 func (b *Backend) secret(ctx context.Context, spec sandbox.Spec, id backend.Identity, name string, data map[string]string) error {
@@ -364,7 +364,7 @@ func (b *Backend) secret(ctx context.Context, spec sandbox.Spec, id backend.Iden
 	if err != nil {
 		return err
 	}
-	if old != nil && old.Metadata.Labels["lifier.owner"] != id.Owner {
+	if old != nil && old.Metadata.Labels["ere.owner"] != id.Owner {
 		return fmt.Errorf("refusing foreign secret %s", name)
 	}
 	meta := b.meta(spec, id, name)
@@ -384,7 +384,7 @@ func (b *Backend) Status(ctx context.Context, ref sandbox.Ref) (sandbox.Status, 
 		return status, err
 	}
 	status.ResourceID = r.Metadata.UID
-	status.Digest = r.Metadata.Annotations["lifier.digest"]
+	status.Digest = r.Metadata.Annotations["ere.digest"]
 	status.Managed = true
 	status.State = sandbox.StateStarting
 	if b.KubeVirt {
@@ -491,7 +491,7 @@ func (b *Backend) Destroy(ctx context.Context, ref sandbox.Ref) (sandbox.Status,
 			return sandbox.Status{}, err
 		}
 		if item != nil {
-			if item.Metadata.Labels["lifier.owner"] != id.Owner {
+			if item.Metadata.Labels["ere.owner"] != id.Owner {
 				return sandbox.Status{}, fmt.Errorf("refusing foreign secret")
 			}
 			if err := b.deleteOwned(ctx, "secret", item); err != nil {
@@ -507,7 +507,7 @@ func (b *Backend) Destroy(ctx context.Context, ref sandbox.Ref) (sandbox.Status,
 }
 
 func (b *Backend) List(ctx context.Context) (sandbox.List, error) {
-	out, err := b.run(ctx, "", "get", b.kind(), "-l", "app.kubernetes.io/managed-by=lifier,lifier.backend="+b.Name(), "-o", "json")
+	out, err := b.run(ctx, "", "get", b.kind(), "-l", "app.kubernetes.io/managed-by=ere,ere.backend="+b.Name(), "-o", "json")
 	if err != nil {
 		return sandbox.List{}, err
 	}
@@ -519,7 +519,7 @@ func (b *Backend) List(ctx context.Context) (sandbox.List, error) {
 	}
 	result := sandbox.List{Sandboxes: []sandbox.Status{}}
 	for _, r := range list.Items {
-		status, err := b.Status(ctx, sandbox.Ref{Name: r.Metadata.Labels["lifier.sandbox"]})
+		status, err := b.Status(ctx, sandbox.Ref{Name: r.Metadata.Labels["ere.sandbox"]})
 		if err != nil {
 			return result, err
 		}
@@ -587,7 +587,7 @@ func (b *Backend) Logs(ctx context.Context, req sandbox.LogRequest) (sandbox.Log
 		lines = 200
 	}
 	if b.KubeVirt {
-		out, err := b.Exec(ctx, sandbox.ExecRequest{Name: req.Name, Argv: []string{"sudo", "journalctl", "-u", "lifier-workload", "-n", strconv.Itoa(lines), "--no-pager"}})
+		out, err := b.Exec(ctx, sandbox.ExecRequest{Name: req.Name, Argv: []string{"sudo", "journalctl", "-u", "ere-workload", "-n", strconv.Itoa(lines), "--no-pager"}})
 		if err != nil {
 			return sandbox.Logs{}, err
 		}
@@ -622,7 +622,7 @@ func (b *Backend) Logs(ctx context.Context, req sandbox.LogRequest) (sandbox.Log
 func (b *Backend) guestExec(ctx context.Context, name string, id backend.Identity, script string) (sandbox.ExecResult, error) {
 	user := b.SSHUser
 	if user == "" {
-		user = "lifier"
+		user = "ere"
 	}
 	proxy := []string{"virtctl"}
 	if b.Kubeconfig != "" {
@@ -694,7 +694,7 @@ func (b *Backend) installGuestWorkload(ctx context.Context, name string, id back
 	if err != nil {
 		return err
 	}
-	if secret == nil || secret.Metadata.Labels["lifier.owner"] != id.Owner {
+	if secret == nil || secret.Metadata.Labels["ere.owner"] != id.Owner {
 		return fmt.Errorf("workload secret is absent or foreign")
 	}
 	data, err := base64.StdEncoding.DecodeString(secret.Data["userdata"])
@@ -710,8 +710,8 @@ func (b *Backend) installGuestWorkload(ctx context.Context, name string, id back
 	if err := json.Unmarshal([]byte(strings.TrimPrefix(string(data), "#cloud-config\n")), &cloud); err != nil {
 		return fmt.Errorf("decode guest workload: %w", err)
 	}
-	script := "set -eu\numask 077\nmkdir -p /var/lib/lifier\n"
-	expected := map[string]bool{"/var/lib/lifier/start": false, "/var/lib/lifier/env": false, "/etc/systemd/system/lifier-workload.service": false}
+	script := "set -eu\numask 077\nmkdir -p /var/lib/ere\n"
+	expected := map[string]bool{"/var/lib/ere/start": false, "/var/lib/ere/env": false, "/etc/systemd/system/ere-workload.service": false}
 	for _, file := range cloud.Files {
 		if _, ok := expected[file.Path]; !ok {
 			return fmt.Errorf("unexpected workload file path")
@@ -724,7 +724,7 @@ func (b *Backend) installGuestWorkload(ctx context.Context, name string, id back
 			return fmt.Errorf("incomplete workload secret")
 		}
 	}
-	script += "systemctl daemon-reload\nsystemctl enable --now lifier-workload\n"
+	script += "systemctl daemon-reload\nsystemctl enable --now ere-workload\n"
 	out, err := b.guestExec(ctx, name, id, script)
 	if err != nil {
 		return err

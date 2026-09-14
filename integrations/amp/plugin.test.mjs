@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import plugin from './lifier/index.ts'
-import { settings } from './lifier/settings.ts'
-import { threadSnapshot } from './lifier/thread.ts'
+import plugin from './ere/index.ts'
+import { settings } from './ere/settings.ts'
+import { threadSnapshot } from './ere/thread.ts'
 
 function harness({ timeout = false, remote = false } = {}) {
   const tools = new Map(), calls = [], registeredSkills = []
@@ -34,7 +34,7 @@ test('remote submission persists unknown allocation first and preserves mode', a
   const result = JSON.parse(await h.tools.get('runner_run').execute({ runner: 'test', prompt: 'do work', mode: 'medium' }))
   assert.equal(result.threadId, 'T-1234abcd')
   const submitted = h.calls.find(call => Array.isArray(call) && call[0] === 'submit-thread')
-  assert.deepEqual(submitted[1], { mode: 'medium', executor: 'runner:amp-test', label: 'lifier-allocation-allocation-1', prompt: 'do work' })
+  assert.deepEqual(submitted[1], { mode: 'medium', executor: 'runner:amp-test', label: 'ere-allocation-allocation-1', prompt: 'do work' })
   const unknown = h.calls.findIndex(call => Array.isArray(call) && call[0] === 'runner_activity' && call[1].state === 'unknown')
   assert.ok(unknown < h.calls.indexOf(submitted))
   assert.equal(h.registeredSkills[0].path, 'skills/runner-workflow')

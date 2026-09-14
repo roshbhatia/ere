@@ -20,6 +20,7 @@ provision:
         curl -fsSL https://ampcode.com/install.sh -o "${installer}"
         env HOME=/root AMP_HOME=/opt/amp bash "${installer}"
       fi
+      chmod 755 /opt/amp /opt/amp/bin /opt/amp/bin/amp
       if ! test /usr/local/bin/amp -ef /opt/amp/bin/amp; then
         ln -s /opt/amp/bin/amp /usr/local/bin/amp
       fi

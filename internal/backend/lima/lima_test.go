@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/roshbhatia/lifier/internal/sandbox"
+	"github.com/roshbhatia/ere/internal/sandbox"
 )
 
 func TestTemplateDoesNotInheritHostHomeMount(t *testing.T) {
@@ -40,7 +40,7 @@ func TestListRejectsMalformedJSON(t *testing.T) {
 func TestListFiltersVMType(t *testing.T) {
 	binary := filepath.Join(t.TempDir(), "limactl")
 	script := `#!/bin/sh
-printf '%s\n' '{"name":"lifier-native","vmType":"vz","status":"Running"}' '{"name":"lifier-emulated","vmType":"qemu","status":"Stopped"}'
+printf '%s\n' '{"name":"ere-native","vmType":"vz","status":"Running"}' '{"name":"ere-emulated","vmType":"qemu","status":"Stopped"}'
 `
 	if err := os.WriteFile(binary, []byte(script), 0o700); err != nil {
 		t.Fatal(err)

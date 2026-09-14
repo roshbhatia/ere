@@ -1,4 +1,4 @@
-module github.com/roshbhatia/lifier
+module github.com/roshbhatia/ere
 
 go 1.26
 

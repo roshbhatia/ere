@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/roshbhatia/lifier/internal/config"
+	"github.com/roshbhatia/ere/internal/config"
 )
 
 func TestRunnerArgvServesRemoteThreads(t *testing.T) {

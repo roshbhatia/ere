@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/roshbhatia/lifier/internal/config"
+	"github.com/roshbhatia/ere/internal/config"
 )
 
 func TestChangingRunnerIDCannotBypassBusyProfile(t *testing.T) {

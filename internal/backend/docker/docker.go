@@ -11,17 +11,17 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/roshbhatia/lifier/internal/backend"
-	"github.com/roshbhatia/lifier/internal/sandbox"
+	"github.com/roshbhatia/ere/internal/backend"
+	"github.com/roshbhatia/ere/internal/sandbox"
 )
 
 const (
-	// Prefix keeps lifier containers distinguishable in a shared docker daemon.
-	Prefix = "lifier-"
-	// LabelSandbox is how List finds containers lifier owns.
-	LabelSandbox = "lifier.sandbox"
+	// Prefix keeps ere containers distinguishable in a shared docker daemon.
+	Prefix = "ere-"
+	// LabelSandbox is how List finds containers ere owns.
+	LabelSandbox = "ere.sandbox"
 	// DefaultImage ships amp and a shell. Build it from images/amp/Dockerfile.
-	DefaultImage = "lifier/amp:latest"
+	DefaultImage = "ere/amp:latest"
 )
 
 // Backend drives one docker daemon. Binary may name a drop-in such as podman.
@@ -104,7 +104,7 @@ func (b *Backend) Create(ctx context.Context, spec sandbox.Spec) (sandbox.Status
 		"--name", container(spec.Name),
 		"--hostname", spec.Name,
 		"--label", LabelSandbox + "=" + spec.Name,
-		"--label", "lifier.backend=docker",
+		"--label", "ere.backend=docker",
 		"--workdir", mount,
 		"--init",
 	}
@@ -122,7 +122,7 @@ func (b *Backend) Create(ctx context.Context, spec sandbox.Spec) (sandbox.Status
 		args = append(args, "--memory", strconv.Itoa(spec.MemoryMB)+"m")
 	}
 	for key, value := range spec.Labels {
-		if key == LabelSandbox || key == "lifier.backend" || key == "lifier.owner" || key == "lifier.digest" {
+		if key == LabelSandbox || key == "ere.backend" || key == "ere.owner" || key == "ere.digest" {
 			continue
 		}
 		args = append(args, "--label", key+"="+value)
@@ -139,8 +139,8 @@ func (b *Backend) Create(ctx context.Context, spec sandbox.Spec) (sandbox.Status
 		if err := id.Save(); err != nil {
 			return sandbox.Status{}, err
 		}
-		args = append(args, "--restart", "unless-stopped", "--label", "lifier.owner="+id.Owner, "--label", "lifier.digest="+sandbox.Digest(spec))
-		args = append(args, image, "sh", "-c", "set -a; . /var/lib/lifier/env; set +a; "+backend.WorkloadScript(*spec.Workload))
+		args = append(args, "--restart", "unless-stopped", "--label", "ere.owner="+id.Owner, "--label", "ere.digest="+sandbox.Digest(spec))
+		args = append(args, image, "sh", "-c", "set -a; . /var/lib/ere/env; set +a; "+backend.WorkloadScript(*spec.Workload))
 	} else {
 		args = append(args, image, "sleep", "infinity")
 	}
@@ -226,14 +226,14 @@ func (b *Backend) Status(ctx context.Context, ref sandbox.Ref) (sandbox.Status, 
 		return status, fmt.Errorf("refusing foreign container %s", container(ref.Name))
 	}
 	status.ResourceID = record.ID
-	status.Digest = record.Config.Labels["lifier.digest"]
+	status.Digest = record.Config.Labels["ere.digest"]
 	status.Managed = status.Digest != ""
 	if status.Managed {
 		id, err := backend.LoadIdentity("docker|"+b.Context, ref.Name)
 		if err != nil {
 			return status, err
 		}
-		if record.Config.Labels["lifier.owner"] != id.Owner || (id.UID != "" && id.UID != record.ID) {
+		if record.Config.Labels["ere.owner"] != id.Owner || (id.UID != "" && id.UID != record.ID) {
 			return status, fmt.Errorf("refusing replaced or foreign managed container")
 		}
 		if id.UID == "" {
@@ -325,7 +325,7 @@ func (b *Backend) Logs(ctx context.Context, req sandbox.LogRequest) (sandbox.Log
 }
 
 // LogPath is where a detached exec writes inside the container.
-const LogPath = "/tmp/lifier.log"
+const LogPath = "/tmp/ere.log"
 
 func (b *Backend) Stop(ctx context.Context, ref sandbox.Ref) (sandbox.Status, error) {
 	status, err := b.Status(ctx, ref)
@@ -409,10 +409,10 @@ func (b *Backend) installEnv(ctx context.Context, resourceID string, env map[str
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
 	data := []byte(backend.EnvFile(env))
-	if err := tw.WriteHeader(&tar.Header{Name: "lifier/", Mode: 0o700, Typeflag: tar.TypeDir}); err != nil {
+	if err := tw.WriteHeader(&tar.Header{Name: "ere/", Mode: 0o700, Typeflag: tar.TypeDir}); err != nil {
 		return err
 	}
-	if err := tw.WriteHeader(&tar.Header{Name: "lifier/env", Mode: 0o600, Size: int64(len(data))}); err != nil {
+	if err := tw.WriteHeader(&tar.Header{Name: "ere/env", Mode: 0o600, Size: int64(len(data))}); err != nil {
 		return err
 	}
 	if _, err := tw.Write(data); err != nil {
